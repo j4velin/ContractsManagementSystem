@@ -1,5 +1,6 @@
 package de.j4velin.contracts.controller
 
+import de.j4velin.contracts.data.Cancellation
 import de.j4velin.contracts.data.Contract
 import de.j4velin.contracts.data.ContractDTO
 import de.j4velin.contracts.data.ContractsRepository
@@ -51,8 +52,16 @@ class ContractsController(private val repository: ContractsRepository) {
     @GetMapping("/contracts/{id}/toggleCancel")
     fun toggleCanceled(@PathVariable id: String, @AuthenticationPrincipal user: User): String {
         val update = getContract(id, user)?.let {
-            val newCancellation = it.cancellation.copy(canceled = !it.cancellation.canceled)
-            it.copy(cancellation = newCancellation).run { this.id = id; this }
+            Cancellation.toggleCancel(it).withId(id)
+        } ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
+        repository.save(update)
+        return "redirect:/contracts"
+    }
+
+    @GetMapping("/contracts/{id}/toggleCancelAck")
+    fun toggleCancelAck(@PathVariable id: String, @AuthenticationPrincipal user: User): String {
+        val update = getContract(id, user)?.let {
+            Cancellation.toggleCancelAck(it).withId(id)
         } ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
         repository.save(update)
         return "redirect:/contracts"
@@ -62,9 +71,8 @@ class ContractsController(private val repository: ContractsRepository) {
     fun toggleBonus(@PathVariable id: String, @AuthenticationPrincipal user: User): String {
         val update = getContract(id, user)?.let {
             val newBonus = it.bonus.copy(received = !it.bonus.received)
-            it.copy(bonus = newBonus).run { this.id = id; this }
+            it.copy(bonus = newBonus).withId(id)
         } ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
-        println("toggleBonus $update, id=${update.id}")
         repository.save(update)
         return "redirect:/contracts"
     }
@@ -76,11 +84,16 @@ class ContractsController(private val repository: ContractsRepository) {
         @AuthenticationPrincipal user: User
     ): String {
         getContract(id, user) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
-        val contract = Contract(contractDto, user.id).also { it.id = id }
+        val contract = Contract(contractDto, user.id).withId(id)
         repository.save(contract)
         return "redirect:/contracts"
     }
 
+    /**
+     * @param id the contract id to retrieve
+     * @param user the current user
+     * @return the requested contract, if such a contract exists
+     */
     private fun getContract(id: String, user: User): Contract? {
         val contract = repository.findById(id)
         return if (!contract.isPresent) {
@@ -88,7 +101,7 @@ class ContractsController(private val repository: ContractsRepository) {
         } else if (contract.get().userId != user.id) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to access this item")
         } else {
-            contract.get().let { it.id = id; it }
+            contract.get().withId(id)
         }
     }
 }

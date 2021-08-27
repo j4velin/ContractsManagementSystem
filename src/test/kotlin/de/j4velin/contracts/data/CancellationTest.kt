@@ -1,7 +1,6 @@
 package de.j4velin.contracts.data
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.time.LocalDate
 import java.time.Period
@@ -105,5 +104,31 @@ class CancellationTest {
 
         // 3 months min -> 03/01/2020 -> 5 years extension -> 03/01/2025 -> 2 month notice -> 02/01/2025
         assertEquals(LocalDate.of(2025, 2, 1), cancelDate)
+    }
+
+    @Test
+    fun `test toggle cancel`() {
+        val cancelInfo = Cancellation(noticePeriod = Period.ofDays(1))
+        assertFalse(cancelInfo.canceled)
+        assertFalse(cancelInfo.ack)
+        assertNull(cancelInfo.endDate)
+        val contract = Contract("id", "type", "company", cancellation = cancelInfo)
+        val newContract = Cancellation.toggleCancel(contract)
+        assertTrue(newContract.cancellation.canceled)
+        assertNotNull(newContract.cancellation.endDate)
+        assertFalse(newContract.cancellation.ack) // ack should not be affected by toggling cancel state
+    }
+
+    @Test
+    fun `test toggle cancel ack`() {
+        val cancelInfo = Cancellation(noticePeriod = Period.ofDays(1))
+        assertFalse(cancelInfo.canceled)
+        assertFalse(cancelInfo.ack)
+        assertNull(cancelInfo.endDate)
+        val contract = Contract("id", "type", "company", cancellation = cancelInfo)
+        val newContract = Cancellation.toggleCancelAck(contract)
+        assertTrue(newContract.cancellation.canceled) // should also 'cancel' the contract
+        assertNotNull(newContract.cancellation.endDate)
+        assertTrue(newContract.cancellation.ack)
     }
 }

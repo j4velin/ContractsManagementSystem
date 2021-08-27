@@ -28,6 +28,9 @@
             search = input.value.toLowerCase();
             rows = table.getElementsByTagName('tr');
             for (i = 0; i < rows.length; i++) {
+                if (rows[i].id == 'tableHeader') {
+                    continue;
+                }
                 rows[i].style.display = 'none';
                 cols = rows[i].getElementsByTagName('td');
                 for (j = 0; j < cols.length; j++) {

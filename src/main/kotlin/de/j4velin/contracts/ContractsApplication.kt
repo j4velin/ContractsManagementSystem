@@ -16,5 +16,3 @@ class ContractsApplication {
 fun main(args: Array<String>) {
     runApplication<ContractsApplication>(*args)
 }
-
-

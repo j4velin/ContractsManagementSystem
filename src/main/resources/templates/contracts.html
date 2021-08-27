@@ -5,18 +5,24 @@
 <nav th:replace="fragments/header :: nav('contracts')"></nav>
 <main role="main" class="container">
     <div class="row mb-3 float-end">
-        <input type="text" class="form-control" size="20" id="filter" th:placeholder="#{action.filter}"
+        <input type="text" class="form-control" size="20" id="search" th:placeholder="#{action.search}"
                onkeyup="filter(this, document.getElementById('contracts'))">
     </div>
     <table class="table table-hover" id="contracts">
         <thead>
-        <tr>
+        <tr id="tableHeader">
             <th th:text="#{contract.type}">Type</th>
             <th th:text="#{contract.company}">Company</th>
             <th th:text="#{contract.notes}">Notes</th>
             <th class="text-center" th:text="#{contracts.header.bonus}">Bonus</th>
-            <th class="text-center" th:text="#{contract.canceled}">Canceled</th>
-            <th th:text="#{contract.endDate}">End date</th>
+            <th class="text-center">
+                <div th:text="#{contract.canceled}">Canceled</div>
+                <div th:text="#{contracts.header.acknowledged}">acknowledged</div>
+            </th>
+            <th>
+                <div th:text="#{contract.cancelDate}" class="text-muted fw-light fst-italic">Cancel Date</div>
+                <div th:text="#{contract.endDate}">End Date</div>
+            </th>
             <th style="text-align: right;" th:text="#{contracts.header.edit}">Edit</th>
         </tr>
         </thead>
@@ -35,13 +41,18 @@
                 </div>
             </td>
             <td class="text-center">
-                <a th:href="@{/contracts/{id}/toggleCancel(id=${contract.id})}">
+                <a th:href="@{/contracts/{id}/toggleCancel(id=${contract.id})}" class="text-decoration-none me-1">
                     <i class="bi bi-square"
                        th:class="${contract.cancellation.canceled ? 'bi bi-check-square-fill text-success' : 'bi bi-square text-dark'}"></i>
                 </a>
+                <a th:href="@{/contracts/{id}/toggleCancelAck(id=${contract.id})}" class="text-decoration-none">
+                    <i class="bi bi-square"
+                       th:class="${contract.cancellation.ack ? 'bi bi-check-square-fill text-success' : 'bi bi-square text-dark'}"></i>
+                </a>
             </td>
-            <td th:text="${contract.getNextPossibleEndDate()}"
-                th:class="not ${contract.cancellation.canceled} ? 'text-muted fw-light fst-italic'"></td>
+            <td th:class="not ${contract.cancellation.canceled} ? 'text-muted fw-light fst-italic'"
+                th:text="${contract.getLatestPossibleCancelDate()} ?: ${contract.getNextPossibleEndDate()}">
+            </td>
             <td style="text-align: right;">
                 <a th:href="@{/contracts/{id}(id=${contract.id})}" class="text-decoration-none">
                     <i class="bi bi-pencil-square me-3 text-primary"></i>

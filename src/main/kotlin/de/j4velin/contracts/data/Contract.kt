@@ -1,13 +1,21 @@
 package de.j4velin.contracts.data
 
-import org.springframework.context.i18n.LocaleContextHolder
+import de.j4velin.contracts.localized
 import org.springframework.data.annotation.Id
 import org.springframework.data.mongodb.core.mapping.Document
 import java.time.LocalDate
-import java.time.Period
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
+/**
+ * Data class representing a contract / subscription
+ *
+ * @property userId the id of the user, who owns the contract
+ * @property type describes what kind of contract this is (for example: Rent, ISP, Streaming subscription, ...)
+ * @property company the other party of the contract
+ * @property notes additional, user defined notes
+ * @property startDate the date when this contract started
+ * @property cancellation information on how to cancel the contract
+ * @property bonus information about a bonus / reward program associated with the contract
+ */
 @Document
 data class Contract internal constructor(
     val userId: String,
@@ -18,6 +26,11 @@ data class Contract internal constructor(
     val cancellation: Cancellation = Cancellation(),
     val bonus: Bonus = Bonus()
 ) {
+    /**
+     * Constructs a [Contract] from a [ContractDTO]
+     * @param data the DTO data
+     * @param userId the userId of this contract's owner
+     */
     constructor(data: ContractDTO, userId: String) : this(
         userId,
         type = data.type,
@@ -28,87 +41,36 @@ data class Contract internal constructor(
         bonus = Bonus.fromDTO(data)
     )
 
+    /**
+     * the contracts unique id. Assigned by the database
+     */
     @Id
     lateinit var id: String
 
+    /**
+     * @return a localized string representation of the date of the next possible ending of the contract. Might be null
+     * if that information is not available
+     */
     fun getNextPossibleEndDate() =
-        cancellation.getNextPossibleEndDate(startDate, LocalDate.now())?.format(
-            DateTimeFormatter.ofLocalizedDate(
-                FormatStyle.MEDIUM
-            ).withLocale(LocaleContextHolder.getLocale())
-        )
-}
-
-data class Cancellation(
-    val minDuration: Period? = null,
-    val noticePeriod: Period? = null,
-    val extendPeriod: Period? = minDuration,
-    val endDate: LocalDate? = null,
-    val canceled: Boolean = endDate != null,
-    val ack: Boolean = false
-) {
-    companion object {
-        fun fromDTO(data: ContractDTO) = Cancellation(
-            minDuration = if (data.minDurationUnit != null) Period.parse("P${data.minDurationValue?.toInt() ?: 0}${data.minDurationUnit}") else null,
-            noticePeriod = if (data.noticePeriodUnit != null) Period.parse("P${data.noticePeriodValue?.toInt() ?: 0}${data.noticePeriodUnit}") else null,
-            extendPeriod = if (data.extendPeriodUnit != null) Period.parse("P${data.extendPeriodValue?.toInt() ?: 0}${data.extendPeriodUnit}") else null,
-            endDate = if (data.endDate?.isBlank() == false) LocalDate.parse(data.endDate) else null,
-            canceled = data.canceled != null || data.endDate?.isBlank() == false,
-            ack = data.cancelAck != null
-        )
-    }
-
-    fun hasCancellationInfo() = minDuration != null || noticePeriod != null || canceled || ack || endDate != null
+        cancellation.getNextPossibleEndDate(startDate, LocalDate.now())?.localized()
 
     /**
-     * @param startDate the contract's start date, if known
-     * @param now LocalDate.now() (parameterized for testing)
-     * @return the next possible end date for the contract or null, if that information is not available
+     * @return a localized string representation of the latest date to cancel the contract in time. Might be null if
+     * that information is not available
      */
-    internal fun getNextPossibleEndDate(startDate: LocalDate?, now: LocalDate): LocalDate? {
-        if (endDate != null) {
-            return endDate
-        }
-        if (noticePeriod == null && (startDate == null || minDuration == null)) {
-            return null
-        }
-        var possibleEnd = now
-        if (noticePeriod != null) {
-            possibleEnd = possibleEnd.plus(noticePeriod)
-        }
-        if (startDate != null && minDuration != null) {
-            var nextTermEnd = startDate.plus(minDuration)
-            while (nextTermEnd.isBefore(possibleEnd)) {
-                nextTermEnd = nextTermEnd.plus(extendPeriod)
-            }
-            possibleEnd = nextTermEnd
-        }
-        return possibleEnd
-    }
+    fun getLatestPossibleCancelDate() =
+        cancellation.getLatestPossibleCancelDate(startDate, LocalDate.now())?.localized()
 
     /**
-     * @param startDate the contract's start date, if known
-     * @param now LocalDate.now() (parameterized for testing)
-     * @return the latest possible date to cancel the contract as soon as possible, or null, if no notice period is set
-     * or if the contract is already canceled
+     * Sets the id on this contract
+     *
+     * @param id the id to set
+     * @return this instance for chaining commands
      */
-    internal fun getLatestPossibleCancelDate(startDate: LocalDate?, now: LocalDate): LocalDate? {
-        if (endDate != null || noticePeriod == null) {
-            return null
-        }
-        return getNextPossibleEndDate(startDate, now)?.minus(noticePeriod)
+    fun withId(id: String): Contract {
+        this.id = id
+        return this
     }
-}
-
-data class Bonus(val description: String? = null, val received: Boolean = false) {
-    companion object {
-        fun fromDTO(data: ContractDTO) = Bonus(
-            description = if (data.bonusDescription?.isBlank() == false) data.bonusDescription else null,
-            received = data.bonusReceived != null
-        )
-    }
-
-    fun hasBonus() = description != null || received
 }
 
 data class ContractDTO(
