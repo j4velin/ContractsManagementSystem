@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html xmlns:th="https://www.thymeleaf.org">
+<head th:replace="fragments/header :: head"></head>
+<body>
+<nav th:replace="fragments/header :: nav('about')"></nav>
+<main role="main" class="container" style="max-width: 400px;">
+    <table class="table table-borderless">
+        <tr>
+            <td>
+                <i class="bi bi-x-octagon" style="font-size: 2rem; color: red;"></i>
+            </td>
+            <td th:text="#{error.general}">
+                Sorry, your request can not be handled at the moment :(
+            </td>
+        </tr>
+    </table>
+</main>
+<div th:replace="fragments/footer :: footer"></div>
+</body>
+</html>

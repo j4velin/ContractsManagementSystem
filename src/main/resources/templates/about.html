@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="https://www.thymeleaf.org">
+<head th:replace="fragments/header :: head"></head>
+<body>
+<nav th:replace="fragments/header :: nav('about')"></nav>
+<main role="main" class="container" style="max-width: 400px;">
+    <div class="card mt-4">
+        <div class="card-body p-4">
+            Thomas Hoffmann<br/>
+            Schwanhäußerstr. 5<br/>
+            90408 Nürnberg<br/><br/>
+            cms@hoffmann-thomas.de
+        </div>
+    </div>
+</main>
+<div th:replace="fragments/footer :: footer"></div>
+</body>
+</html>

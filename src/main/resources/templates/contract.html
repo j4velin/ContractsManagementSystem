@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html xmlns:th="https://www.thymeleaf.org">
+<head th:replace="fragments/header :: head"></head>
+<body>
+<nav th:replace="fragments/header :: nav('contracts')"></nav>
+<main role="main" class="container" style="max-width: 330px;">
+    <form th:action="${contract} ? @{/contracts/{id}(id=${contract.id})} : @{/contracts}" method="post"
+          class="needs-validation" novalidate>
+        <h1 class="h3 mb-4 fw-normal" th:text="${contract} ? #{contract.action.edit} : #{contract.action.add}">Edit contract</h1>
+        <div class="mb-3">
+            <label for="type" class="form-label" th:text="#{contract.type}">Type</label>
+            <input type="text" class="form-control" id="type" name="type" th:value="${contract} ? ${contract.type} : ''"
+                   required>
+        </div>
+        <div class="mb-3">
+            <label for="company" class="form-label" th:text="#{contract.company}">Company</label>
+            <input type="text" class="form-control" id="company" name="company"
+                   th:value="${contract} ? ${contract.company} : ''"
+                   required>
+        </div>
+        <div class="mb-3">
+            <label for="notes" class="form-label" th:text="#{contract.notes}">Notes</label>
+            <textarea class="form-control" id="notes" name="notes">[[${contract} ? ${contract.notes} : '']]</textarea>
+        </div>
+        <div class="mb-3">
+            <label for="startDate" class="form-label" th:text="#{contract.startDate}">Start date</label>
+            <input id="startDate" class="form-control" type="date" name="startDate"
+                   th:value="${contract} ? ${contract.startDate} : ''">
+        </div>
+        <div class="accordion mb-3">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="cancelHeader">
+                    <button class="accordion-button"
+                            th:classappend="${contract} and ${contract.cancellation.hasCancellationInfo()} ? 'show' : 'collapsed'"
+                            type="button" data-bs-toggle="collapse"
+                            data-bs-target="#cancelBody"
+                            th:attr="aria-expanded=${contract} != null and ${contract.cancellation.hasCancellationInfo()} ? 'true' : 'false'"
+                            aria-controls="cancelBody"  th:text="#{contract.cancellation}">
+                        Cancellation
+                    </button>
+                </h2>
+                <div id="cancelBody"
+                     class="accordion-collapse"
+                     th:classappend="${contract} and ${contract.cancellation.hasCancellationInfo()} ? 'show' : 'collapse'"
+                     aria-labelledby="cancelHeader">
+                    <div class="accordion-body">
+                        <div th:replace="fragments/components :: period(#{contract.cancellation.minDuration}, 'minDuration',
+                        ${contract} and ${contract.cancellation.minDuration} ? ${{contract.cancellation.minDuration}} : '')">
+                        </div>
+                        <div th:replace="fragments/components :: period(#{contract.cancellation.extensionPeriod}, 'extendPeriod',
+                        ${contract} and ${contract.cancellation.extendPeriod} ? ${{contract.cancellation.extendPeriod}} : '')">
+                        </div>
+                        <div th:replace="fragments/components :: period(#{contract.cancellation.noticePeriod}, 'noticePeriod',
+                        ${contract} and ${contract.cancellation.noticePeriod} ? ${{contract.cancellation.noticePeriod}} : '')">
+                        </div>
+                        <div class="mb-3">
+                            <input class="form-check-input" type="checkbox" value="" id="canceled"
+                                   name="canceled"
+                                   th:checked="${contract} and ${contract.cancellation.canceled}">
+                            <label class="form-check-label" for="canceled" th:text="#{contract.canceled}">Canceled</label>
+                        </div>
+                        <div class="mb-3">
+                            <input class="form-check-input" type="checkbox" value="" id="cancelAck"
+                                   name="canceled"
+                                   th:checked="${contract} and ${contract.cancellation.ack}">
+                            <label class="form-check-label" for="cancelAck" th:text="#{contract.cancellation.ack}">Cancellation acknowledged</label>
+                        </div>
+                        <div class="mb-3">
+                            <label for="endDate" class="form-label" th:text="#{contract.endDate}">End date</label>
+                            <input id="endDate" class="form-control" type="date" name="endDate"
+                                   th:value="${contract} ? ${contract.cancellation.endDate} : ''">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="accordion mb-3">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="bonusHeader">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                            th:classappend="${contract} and ${contract.bonus.hasBonus()} ? 'show' : 'collapsed'"
+                            data-bs-target="#bonusBody"
+                            th:attr="aria-expanded=${contract} and ${contract.bonus.hasBonus()} ? 'true' : 'false'"
+                            aria-controls="bonusBody" th:text="#{contract.bonus}">
+                        Bonus / Reward
+                    </button>
+                </h2>
+                <div id="bonusBody" class="accordion-collapse"
+                     th:classappend="${contract} != null and ${contract.bonus.hasBonus()} ? 'show' : 'collapse'"
+                     aria-labelledby="bonusHeader">
+                    <div class="accordion-body">
+                        <div class="mb-3">
+                            <label for="bonusDescription" class="form-label" th:text="#{contract.bonus.description}">Description</label>
+                            <textarea class="form-control" id="bonusDescription" name="bonusDescription">[[${contract} ? ${contract.bonus.description} : '']]</textarea>
+                        </div>
+                        <div class="mb-3">
+                            <input class="form-check-input" type="checkbox" value="" id="bonusReceived"
+                                   name="bonusReceived"
+                                   th:checked="${contract} != null and ${contract.bonus.received}">
+                            <label class="form-check-label" for="bonusReceived" th:text="#{contract.bonus.received}">Bonus received</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="w-100">
+            <input type="submit" th:value="#{action.save}" class="btn btn-primary mt-3"/>
+            <a th:if="${contract}" th:href="@{/contracts/{id}/delete(id=${contract.id})}" class="btn btn-outline-danger mt-3 float-end" th:text="#{action.delete}">Delete</a>
+        </div>
+    </form>
+</main>
+<div th:replace="fragments/footer :: footer"></div>
+<div th:replace="fragments/scripts :: formvalidation"></div>
+</body>
+</html>

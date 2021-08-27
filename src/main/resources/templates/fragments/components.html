@@ -1,0 +1,27 @@
+<div xmlns:th="http://www.thymeleaf.org" class="mb-3" th:fragment="period(label, id, str)">
+    <label th:for="${id}" class="form-label" th:text="${label}"></label>
+    <div class="input-group mb-3" th:with="len=${#strings.length(str)}">
+        <input type="number" class="form-control" th:id="${id}" th:name="${id} + 'Value'"
+               size="3"
+               th:value="${len > 0} ? ${#strings.substring(str,1,len-1)} : ''">
+        <select class="form-select" th:id="${id} + 'Unit'" th:name="${id} + 'Unit'">
+            <option value="" th:text="#{form.choose}">Choose...</option>
+            <option value="D"
+                    th:selected="${len > 0 and #strings.substring(str,len-1,len) == 'D'}" th:text="#{form.duration.days}">
+                days
+            </option>
+            <option value="W"
+                    th:selected="${len > 0 and #strings.substring(str,len-1,len) == 'W'}" th:text="#{form.duration.weeks}">
+                weeks
+            </option>
+            <option value="M"
+                    th:selected="${len > 0 and #strings.substring(str,len-1,len) == 'M'}" th:text="#{form.duration.months}">
+                months
+            </option>
+            <option value="Y"
+                    th:selected="${len > 0 and #strings.substring(str,len-1,len) == 'Y'}" th:text="#{form.duration.years}">
+                years
+            </option>
+        </select>
+    </div>
+</div>

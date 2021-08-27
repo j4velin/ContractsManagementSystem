@@ -1,0 +1,71 @@
+<html>
+<head xmlns:th="http://www.thymeleaf.org" th:fragment="head">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Contracts Management System</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/favicon.svg}">
+    <link th:rel="stylesheet" th:href="@{/webjars/bootstrap/css/bootstrap.min.css}"/>
+    <link th:rel="stylesheet" th:href="@{/webjars/bootstrap-icons/font/bootstrap-icons.css}">
+    <style>
+    body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding-top: 6rem;
+        padding-bottom: 40px;
+        background-color: #f5f5f5;
+    }
+    .form-floating:focus-within {
+        z-index: 2;
+    }
+
+
+    </style>
+</head>
+<body>
+<nav xmlns:th="http://www.thymeleaf.org" th:fragment="nav(activeTab)"
+     class="navbar navbar-expand-md navbar-dark fixed-top bg-dark">
+    <div class="container">
+        <div class="navbar-brand me-5">
+            <i class="bi bi-pencil-square text-light me-2" style="font-size: 1.5rem;"></i>
+            <a class="navbar-brand" href="/" style="font-size: 1.5rem;">ContractsMS</a>
+        </div>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMenu"
+                aria-controls="navbarMenu" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarMenu">
+            <ul class="navbar-nav me-auto mb-2 mb-md-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="/" th:classappend="${activeTab == 'home'} ? 'active'"
+                       th:text="#{nav.home}">Home</a>
+                </li>
+                <li class="nav-item" th:if="${#httpServletRequest.remoteUser}">
+                    <a class="nav-link" th:href="@{/contracts}" th:classappend="${activeTab == 'contracts'} ? 'active'"
+                       th:text="#{nav.contracts}">Contracts</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/about}" th:classappend="${activeTab == 'about'} ? 'active'"
+                       th:text="#{nav.about}">About</a>
+                </li>
+                <li class="nav-item" th:if="${#httpServletRequest.remoteUser}">
+                    <a href="javascript:document.logoutForm.submit()" class="nav-link"
+                       th:text="#{nav.logout}">Logout</a>
+                    <form name="logoutForm" th:action="@{/logout}" method="post" th:hidden="true"></form>
+                </li>
+            </ul>
+            <div class="my-2 my-lg-0">
+                <div th:if="not ${#httpServletRequest.remoteUser}">
+                    <a th:href="@{/login}" class="btn btn-warning me-2" th:text="#{nav.login}">Login</a>
+                    <a th:href="@{/register}" class="btn btn-outline-light" th:text="#{nav.register}">Register</a>
+                </div>
+                <div class="text-light" th:if="${#httpServletRequest.remoteUser}">
+                    <i class="bi bi-person-circle me-2" style="font-size: 1.5rem;"></i>
+                    <a class="text-decoration-none text-white fw-light" style="font-size: 1.5rem;">[[${#httpServletRequest.remoteUser}]]</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</nav>
+</body>
+</html>

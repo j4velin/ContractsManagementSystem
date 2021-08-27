@@ -1,0 +1,52 @@
+<div xmlns:th="http://www.thymeleaf.org" th:fragment="formvalidation">
+    <script>
+    (function () {
+        'use strict'
+
+        // Fetch all the forms we want to apply custom Bootstrap validation styles to
+        var forms = document.querySelectorAll('.needs-validation')
+
+        // Loop over them and prevent submission
+        Array.prototype.slice.call(forms)
+            .forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    if (!form.checkValidity()) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                    }
+
+                    form.classList.add('was-validated')
+                }, false)
+            })
+    })()
+    </script>
+</div>
+
+<div xmlns:th="http://www.thymeleaf.org" th:fragment="filterTable">
+    <script>
+        function filter(input, table) {
+            search = input.value.toLowerCase();
+            rows = table.getElementsByTagName('tr');
+            for (i = 0; i < rows.length; i++) {
+                rows[i].style.display = 'none';
+                cols = rows[i].getElementsByTagName('td');
+                for (j = 0; j < cols.length; j++) {
+                    var text = cols[j].textContent.toLowerCase();
+                    if (text.indexOf(search) >= 0) {
+                        rows[i].style.display = '';
+                        break;
+                    }
+                }
+            }
+        }
+    </script>
+</div>
+
+<div xmlns:th="http://www.thymeleaf.org" th:fragment="tooltips">
+    <script>
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+          return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
+    </script>
+</div>

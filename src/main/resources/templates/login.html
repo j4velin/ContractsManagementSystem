@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="https://www.thymeleaf.org">
+<head th:replace="fragments/header :: head"></head>
+<body>
+<nav th:replace="fragments/header :: nav('login')"></nav>
+<main role="main" class="container" style="max-width: 330px;">
+    <div th:if="${param.error}" class="alert alert-danger" th:text="#{login.error.invalidCredentials}">
+        Invalid username or password.
+    </div>
+    <div th:if="${param.logout}" class="alert alert-info" th:text="#{login.info.loggedOut}">
+        You have been logged out.
+    </div>
+    <form th:action="@{/login}" method="post">
+        <h1 class="h3 mb-4 fw-normal" th:text="#{login.title}">Please sign in</h1>
+        <div class="form-floating">
+            <input type="text" class="form-control" id="username" placeholder="User Name" name="username"
+                   style="border-bottom-right-radius: 0; border-bottom-left-radius: 0; margin-bottom: -1px;" required>
+            <label for="username" th:text="#{login.username}">User Name</label>
+        </div>
+        <div class="form-floating">
+            <input type="password" class="form-control" id="password" placeholder="Password" name="password"
+                   style="border-top-right-radius: 0; border-top-left-radius: 0; req" required>
+            <label for="password" th:text="#{login.password}">Password</label>
+        </div>
+        <div><input type="submit" th:value="#{login.action.login}" value="Login" class="w-100 mt-4 btn btn-lg btn-primary"/></div>
+    </form>
+</main>
+<div th:replace="fragments/footer :: footer"></div>
+</body>
+</html>

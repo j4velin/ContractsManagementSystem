@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html xmlns:th="https://www.thymeleaf.org">
+<head th:replace="fragments/header :: head"></head>
+<body>
+<nav th:replace="fragments/header :: nav('contracts')"></nav>
+<main role="main" class="container">
+    <div class="row mb-3 float-end">
+        <input type="text" class="form-control" size="20" id="filter" th:placeholder="#{action.filter}"
+               onkeyup="filter(this, document.getElementById('contracts'))">
+    </div>
+    <table class="table table-hover" id="contracts">
+        <thead>
+        <tr>
+            <th th:text="#{contract.type}">Type</th>
+            <th th:text="#{contract.company}">Company</th>
+            <th th:text="#{contract.notes}">Notes</th>
+            <th class="text-center" th:text="#{contracts.header.bonus}">Bonus</th>
+            <th class="text-center" th:text="#{contract.canceled}">Canceled</th>
+            <th th:text="#{contract.endDate}">End date</th>
+            <th style="text-align: right;" th:text="#{contracts.header.edit}">Edit</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="contract : ${contracts}">
+            <td th:text="${contract.type}"></td>
+            <td th:text="${contract.company}"></td>
+            <td th:text="${contract.notes}"></td>
+            <td class="text-center">
+                <div th:if="${contract.bonus.hasBonus()}">
+                    <a th:href="@{/contracts/{id}/toggleBonus(id=${contract.id})}" data-bs-toggle="tooltip"
+                       th:title="${contract.bonus.description}">
+                        <i class="bi bi-hourglass"
+                           th:class="${contract.bonus.received ? 'bi bi-check-circle-fill text-success' : 'bi bi-hourglass text-dark'}"></i>
+                    </a>
+                </div>
+            </td>
+            <td class="text-center">
+                <a th:href="@{/contracts/{id}/toggleCancel(id=${contract.id})}">
+                    <i class="bi bi-square"
+                       th:class="${contract.cancellation.canceled ? 'bi bi-check-square-fill text-success' : 'bi bi-square text-dark'}"></i>
+                </a>
+            </td>
+            <td th:text="${contract.getNextPossibleEndDate()}"
+                th:class="not ${contract.cancellation.canceled} ? 'text-muted fw-light fst-italic'"></td>
+            <td style="text-align: right;">
+                <a th:href="@{/contracts/{id}(id=${contract.id})}" class="text-decoration-none">
+                    <i class="bi bi-pencil-square me-3 text-primary"></i>
+                </a>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <a th:href="@{/contracts/add}" class="btn btn-primary mt-4" th:text="#{contract.action.add}">Add Contract</a>
+</main>
+<div th:replace="fragments/footer :: footer"></div>
+<div th:replace="fragments/scripts :: filterTable"></div>
+<div th:replace="fragments/scripts :: tooltips"></div>
+</body>
+</html>
