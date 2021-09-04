@@ -1,16 +1,16 @@
 package de.j4velin.contracts
 
+import de.j4velin.contracts.config.UserLocaleResolver
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Bean
 import org.springframework.web.servlet.LocaleResolver
-import org.springframework.web.servlet.i18n.SessionLocaleResolver
 
 
 @SpringBootApplication
 class ContractsApplication {
     @Bean
-    fun localeResolver(): LocaleResolver = SessionLocaleResolver()
+    fun localeResolver(): LocaleResolver = UserLocaleResolver()
 }
 
 fun main(args: Array<String>) {

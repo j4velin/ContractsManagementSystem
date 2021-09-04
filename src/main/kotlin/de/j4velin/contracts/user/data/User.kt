@@ -5,17 +5,17 @@ import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.userdetails.UserDetails
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 
 @Document
 data class User(
+    @Id val id: String,
     @Indexed(unique = true) private val username: String,
     private val password: String,
     val mail: String,
-    val role: UserRole = UserRole.USER
+    val role: UserRole = UserRole.USER,
+    val locale: String = "en"
 ) : UserDetails {
-    @Id
-    lateinit var id: String
-
     override fun getAuthorities() = listOf(SimpleGrantedAuthority(role.name))
     override fun getPassword() = password
     override fun getUsername() = username
@@ -23,8 +23,22 @@ data class User(
     override fun isAccountNonLocked() = true
     override fun isCredentialsNonExpired() = true
     override fun isEnabled() = true
+
+    /**
+     * Constructs an [User] from an [UserDTO]
+     * @param data the DTO data
+     */
+    constructor(data: UserDTO) : this(
+        id = "", username = data.username, password = BCryptPasswordEncoder().encode(data.password), mail = data.mail
+    )
 }
 
 enum class UserRole {
     USER
 }
+
+data class UserDTO(
+    val username: String,
+    val password: String,
+    val mail: String
+)
