@@ -83,7 +83,7 @@ data class Cancellation(
      * @param now LocalDate.now() (parameterized for testing)
      * @return the next possible end date for the contract or null, if that information is not available
      */
-    internal fun getNextPossibleEndDate(startDate: LocalDate?, now: LocalDate): LocalDate? {
+    internal fun getNextPossibleEndDate(startDate: LocalDate?, now: LocalDate = LocalDate.now()): LocalDate? {
         if (endDate != null) {
             return endDate
         }
@@ -110,7 +110,7 @@ data class Cancellation(
      * @return the latest possible date to cancel the contract as soon as possible, or null, if no notice period is set
      * or if the contract is already canceled
      */
-    internal fun getLatestPossibleCancelDate(startDate: LocalDate?, now: LocalDate): LocalDate? {
+    internal fun getLatestPossibleCancelDate(startDate: LocalDate?, now: LocalDate = LocalDate.now()): LocalDate? {
         if (endDate != null || noticePeriod == null) {
             return null
         }

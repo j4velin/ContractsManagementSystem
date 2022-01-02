@@ -4,6 +4,11 @@
 <body>
 <nav th:replace="fragments/header :: nav('contracts')"></nav>
 <main role="main" class="container">
+    <div class="mb-3 float-start form-check">
+        <input class="form-check-input" type="checkbox" value="" id="filter" checked
+               onclick="hideInactive(this, document.getElementById('contracts'))">
+        <label class="form-check-label" for="filter" th:text="#{action.hideInactive}">Hide inactive</label>
+    </div>
     <div class="row mb-3 float-end">
         <input type="text" class="form-control" size="20" id="search" th:placeholder="#{action.search}"
                onkeyup="filter(this, document.getElementById('contracts'))">
@@ -27,7 +32,7 @@
         </tr>
         </thead>
         <tbody>
-        <tr th:each="contract : ${contracts}">
+        <tr th:each="contract : ${contracts}" th:class="not ${contract.isActive} ? 'inactive'" th:style="not ${contract.isActive} ? 'display: none;'">
             <td th:text="${contract.type}"></td>
             <td th:text="${contract.company}"></td>
             <td th:text="${contract.notes}"></td>
@@ -51,7 +56,7 @@
                 </a>
             </td>
             <td th:class="not ${contract.cancellation.canceled} ? 'text-muted fw-light fst-italic'"
-                th:text="${contract.getLatestPossibleCancelDate()} ?: ${contract.getNextPossibleEndDate()}">
+                th:text="${contract.getLocalizedEndDate()}">
             </td>
             <td style="text-align: right;">
                 <a th:href="@{/contracts/{id}(id=${contract.id})}" class="text-decoration-none">

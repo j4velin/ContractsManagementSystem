@@ -21,7 +21,7 @@ class ContractsController(private val repository: ContractsRepository) {
     fun getContracts(model: Model, @AuthenticationPrincipal user: User): String {
         model.addAttribute(
             "contracts",
-            repository.findByUserId(user.id)
+            repository.findByUserId(user.id).sorted()
         )
         return "contracts"
     }

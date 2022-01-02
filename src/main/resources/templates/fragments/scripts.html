@@ -42,6 +42,21 @@
                 }
             }
         }
+
+        function hideInactive(input, table) {
+            hide = input.checked;
+            rows = table.getElementsByTagName('tr');
+            for (i = 0; i < rows.length; i++) {
+                if (rows[i].id == 'tableHeader') {
+                    continue;
+                }
+                if (hide && rows[i].classList.contains('inactive')) {
+                    rows[i].style.display = 'none';
+                } else {
+                    rows[i].style.display = '';
+                }
+            }
+        }
     </script>
 </div>
 

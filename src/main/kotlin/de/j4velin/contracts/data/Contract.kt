@@ -25,7 +25,8 @@ data class Contract internal constructor(
     val startDate: LocalDate? = null,
     val cancellation: Cancellation = Cancellation(),
     val bonus: Bonus = Bonus()
-) {
+) : Comparable<Contract> {
+
     /**
      * Constructs a [Contract] from a [ContractDTO]
      * @param data the DTO data
@@ -48,18 +49,17 @@ data class Contract internal constructor(
     lateinit var id: String
 
     /**
-     * @return a localized string representation of the date of the next possible ending of the contract. Might be null
-     * if that information is not available
+     * @return a localized string representation of the next possible ending or the latest date to cancel the contract or
+     * null, if no such information is available
      */
-    fun getNextPossibleEndDate() =
-        cancellation.getNextPossibleEndDate(startDate, LocalDate.now())?.localized()
+    fun getLocalizedEndDate() = getLatestPossibleCancelDate()?.localized() ?: getNextPossibleEndDate()?.localized()
 
     /**
-     * @return a localized string representation of the latest date to cancel the contract in time. Might be null if
-     * that information is not available
+     * @return true, if this contract is considered to be 'active', e.g. if it is not yet canceled, the end date is in
+     * the future or if it has outstanding bonus rewards
      */
-    fun getLatestPossibleCancelDate() =
-        cancellation.getLatestPossibleCancelDate(startDate, LocalDate.now())?.localized()
+    fun isActive() =
+        !cancellation.canceled || (bonus.hasBonus() && !bonus.received) || cancellation.endDate?.isAfter(LocalDate.now()) ?: true
 
     /**
      * Sets the id on this contract
@@ -71,6 +71,26 @@ data class Contract internal constructor(
         this.id = id
         return this
     }
+
+    override fun compareTo(other: Contract): Int {
+        val thisDate = getLatestPossibleCancelDate() ?: getNextPossibleEndDate()
+        val otherDate = other.getLatestPossibleCancelDate() ?: other.getNextPossibleEndDate()
+        return when {
+            thisDate == null -> if (otherDate == null) 0 else 1
+            otherDate == null -> -1
+            else -> thisDate.compareTo(otherDate)
+        }
+    }
+
+    /**
+     * @return the date of the next possible ending of the contract. Might be null if that information is not available
+     */
+    private fun getNextPossibleEndDate() = cancellation.getNextPossibleEndDate(startDate)
+
+    /**
+     * @return the latest date to cancel the contract in time. Might be null if that information is not available
+     */
+    private fun getLatestPossibleCancelDate() = cancellation.getLatestPossibleCancelDate(startDate)
 }
 
 data class ContractDTO(
