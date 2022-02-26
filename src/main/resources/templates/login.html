@@ -22,6 +22,10 @@
                    style="border-top-right-radius: 0; border-top-left-radius: 0; req" required>
             <label for="password" th:text="#{login.password}">Password</label>
         </div>
+        <div class="mt-4">
+            <input class="form-check-input" type="checkbox" id="remember-me" name="remember-me" checked>
+            <label class="form-check-label" for="remember-me" th:text="#{login.remember}">Remember me</label>
+        </div>
         <div><input type="submit" th:value="#{login.action.login}" value="Login" class="w-100 mt-4 btn btn-lg btn-primary"/></div>
     </form>
 </main>

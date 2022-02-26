@@ -28,6 +28,9 @@ class WebSecurityConfig : WebSecurityConfigurerAdapter() {
             .and()
             .logout()
             .permitAll()
+            .deleteCookies()
+            .and()
+            .rememberMe()
     }
 
     override fun configure(web: WebSecurity) {
