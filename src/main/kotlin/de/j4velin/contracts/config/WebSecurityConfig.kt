@@ -6,13 +6,15 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.builders.WebSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter
+import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.crypto.password.PasswordEncoder
 
-
 @Configuration
 @EnableWebSecurity
-class WebSecurityConfig : WebSecurityConfigurerAdapter() {
+class WebSecurityConfig(
+    private val userDetailsService: UserDetailsService
+) : WebSecurityConfigurerAdapter() {
 
     override fun configure(http: HttpSecurity) {
         http.authorizeRequests()
@@ -26,11 +28,12 @@ class WebSecurityConfig : WebSecurityConfigurerAdapter() {
             .loginPage("/login")
             .permitAll()
             .and()
-            .logout()
-            .permitAll()
-            .deleteCookies()
-            .and()
             .rememberMe()
+            .userDetailsService(userDetailsService)
+            .and()
+            .logout()
+            .deleteCookies()
+            .permitAll()
     }
 
     override fun configure(web: WebSecurity) {
