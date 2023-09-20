@@ -1,0 +1,7 @@
+server.port=8081
+server.use-forward-headers=true
+server.forward-headers-strategy=native
+server.tomcat.protocol-header=x-forwarded-proto
+spring.data.mongodb.database=contracts
+spring.data.mongodb.uri=TODO
+spring.data.mongodb.auto-index-creation=true
