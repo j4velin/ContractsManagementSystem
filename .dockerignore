@@ -1,0 +1,10 @@
+# Keep the build context small and never copy local secrets into the image
+.git
+.gradle
+.idea
+.claude
+build
+*.iml
+.env
+# may contain database credentials (see .gitignore); the container is configured via environment variables
+src/main/resources/application.properties

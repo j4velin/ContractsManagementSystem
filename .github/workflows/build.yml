@@ -35,3 +35,35 @@ jobs:
     
     - name: Build and test
       run: ./gradlew build
+
+  # Builds the Docker image, starts it together with MongoDB and runs the end-to-end smoke test against it
+  docker:
+
+    runs-on: ubuntu-latest
+
+    env:
+      REMEMBER_ME_KEY: ci-smoke-test-key
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Start app and database
+      run: docker compose up --detach --build --wait
+
+    - name: Smoke test
+      run: scripts/smoke-test.sh http://localhost:8080
+
+    - name: Remember-me key is picked up from the environment
+      run: |
+        if docker compose logs app | grep "remember-me.key is not set"; then
+          echo "REMEMBER_ME_KEY did not reach the app"
+          exit 1
+        fi
+
+    - name: Logs
+      if: always()
+      run: docker compose logs
+
+    - name: Stop
+      if: always()
+      run: docker compose down --volumes

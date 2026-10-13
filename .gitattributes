@@ -1,0 +1,4 @@
+# Shell scripts must keep LF line endings, also in Windows checkouts: they run inside Linux containers
+gradlew text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf

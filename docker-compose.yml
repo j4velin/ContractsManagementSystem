@@ -1,0 +1,36 @@
+# Runs the app together with a MongoDB database:
+#   docker compose up -d --build
+# The app is then available on http://localhost:8080 (or APP_PORT). Settings can be put into a .env file next to
+# this file, see .env.example.
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/contracts
+      # creates the unique index on the username
+      SPRING_DATA_MONGODB_AUTO_INDEX_CREATION: "true"
+      # contracts.remember-me.key; if empty, remembered logins don't survive a restart of the app
+      CONTRACTS_REMEMBERME_KEY: ${REMEMBER_ME_KEY:-}
+
+  mongo:
+    image: mongo:8.0
+    restart: unless-stopped
+    # not published to the host: only the app can reach the database
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  mongo-data:
