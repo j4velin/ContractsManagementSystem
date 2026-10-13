@@ -23,15 +23,21 @@ fun LocalDate.localized() = this.format(
  * @param value the raw form value. Null or blank means "no date"
  * @param field the name of the form field, used in the error message
  * @return the parsed date or null, if no value is given
- * @throws ResponseStatusException with [HttpStatus.BAD_REQUEST], if the value is not a valid date
+ * @throws ResponseStatusException with [HttpStatus.BAD_REQUEST], if the value is not a valid date with a four-digit
+ * year
  */
 internal fun parseDate(value: String?, field: String): LocalDate? {
     if (value.isNullOrBlank()) {
         return null
     }
-    return try {
+    val date = try {
         LocalDate.parse(value.trim())
     } catch (e: DateTimeParseException) {
         throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid $field '$value'", e)
     }
+    // ISO dates may have years like +999999999, for which adding periods overflows LocalDate
+    if (date.year !in 1000..9999) {
+        throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid $field '$value': year out of range")
+    }
+    return date
 }

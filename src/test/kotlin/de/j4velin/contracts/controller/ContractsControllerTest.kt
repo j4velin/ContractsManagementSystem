@@ -1,11 +1,14 @@
 package de.j4velin.contracts.controller
 
 import de.j4velin.contracts.data.Bonus
+import de.j4velin.contracts.data.Cancellation
 import de.j4velin.contracts.data.Contract
 import de.j4velin.contracts.data.ContractsRepository
 import de.j4velin.contracts.user.data.User
 import de.j4velin.contracts.user.data.UsersRepository
+import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.matchesPattern
+import org.hamcrest.Matchers.not
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -24,6 +27,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.time.Period
 import java.util.Optional
 
 @WebMvcTest(ContractsController::class)
@@ -91,6 +95,45 @@ class ContractsControllerTest {
             result.andExpect(content().string(postFormWithCsrf("/contracts/c1/$it")))
         }
     }
+
+    @Test
+    fun `contract page shows stored periods in their unit, whole weeks as weeks`() {
+        val cancellation = Cancellation(
+            minDuration = Period.ofYears(2), noticePeriod = Period.ofWeeks(3), extendPeriod = Period.ofMonths(1)
+        )
+        given(repository.findById("c1"))
+            .willReturn(Optional.of(Contract(testUserId, "type", "company", cancellation = cancellation).withId("c1")))
+        mockMvc.perform(get("/contracts/c1").with(user(testUser)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(periodField("minDuration", "2", "Y")))
+            .andExpect(content().string(periodField("noticePeriod", "3", "W")))
+            .andExpect(content().string(periodField("extendPeriod", "1", "M")))
+    }
+
+    @Test
+    fun `contract page shows days which are not whole weeks as days`() {
+        val cancellation = Cancellation(noticePeriod = Period.ofDays(10))
+        given(repository.findById("c1"))
+            .willReturn(Optional.of(Contract(testUserId, "type", "company", cancellation = cancellation).withId("c1")))
+        mockMvc.perform(get("/contracts/c1").with(user(testUser)))
+            .andExpect(content().string(periodField("noticePeriod", "10", "D")))
+    }
+
+    @Test
+    fun `add page renders empty period fields`() {
+        mockMvc.perform(get("/contracts/add").with(user(testUser)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(matchesPattern("(?s).*<input[^>]*id=\"noticePeriod\"[^>]*value=\"\".*")))
+            .andExpect(content().string(not(containsString("selected=\"selected\""))))
+    }
+
+    /**
+     * @return a matcher for a page containing the period input [id] with the given value and selected unit
+     */
+    private fun periodField(id: String, value: String, unit: String) = matchesPattern(
+        "(?s).*<input[^>]*id=\"$id\"[^>]*value=\"$value\".*" +
+                "<select[^>]*id=\"${id}Unit\"[^>]*>(?:(?!</select>).)*<option value=\"$unit\" selected=\"selected\".*"
+    )
 
     /**
      * @return a matcher for a page containing a POST form with the given action, which has a CSRF token as

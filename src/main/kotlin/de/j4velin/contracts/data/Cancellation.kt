@@ -46,31 +46,33 @@ data class Cancellation(
          * @param unit the unit: D (days), W (weeks), M (months) or Y (years). Null means "no period"
          * @param field the name of the form field, used in the error message
          * @return the parsed [Period] or null, if either the value or the unit is not set
-         * @throws ResponseStatusException with [HttpStatus.BAD_REQUEST], if the value is not a non-negative integer or
-         * the unit is unknown
+         * @throws ResponseStatusException with [HttpStatus.BAD_REQUEST], if the value is not an integer between 0 and
+         * [MAX_PERIOD_AMOUNT] or the unit is unknown
          */
         private fun parsePeriod(value: String?, unit: Char?, field: String): Period? {
             if (unit == null || value.isNullOrBlank()) {
                 return null
             }
             val amount = value.trim().takeIf { it.all { c -> c in '0'..'9' } }?.toIntOrNull()
+                ?.takeIf { it <= MAX_PERIOD_AMOUNT }
                 ?: throw ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Invalid $field value '$value': must be a non-negative integer"
+                    "Invalid $field value '$value': must be an integer between 0 and $MAX_PERIOD_AMOUNT"
                 )
-            try {
-                return when (unit) {
-                    'D' -> Period.ofDays(amount)
-                    'W' -> Period.ofWeeks(amount)
-                    'M' -> Period.ofMonths(amount)
-                    'Y' -> Period.ofYears(amount)
-                    else -> throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid $field unit '$unit'")
-                }
-            } catch (e: ArithmeticException) {
-                // Period.ofWeeks overflows for very large values
-                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid $field value '$value': too large", e)
+            return when (unit) {
+                'D' -> Period.ofDays(amount)
+                'W' -> Period.ofWeeks(amount)
+                'M' -> Period.ofMonths(amount)
+                'Y' -> Period.ofYears(amount)
+                else -> throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid $field unit '$unit'")
             }
         }
+
+        /**
+         * Upper limit for the number of units of a period. Keeps the date calculations within the range of [LocalDate]
+         * (larger values used to crash the contract list) and matches the 3-digit input field
+         */
+        internal const val MAX_PERIOD_AMOUNT = 999
 
         /**
          * Toggles the [Cancellation.canceled] state. Might also affect [Cancellation.endDate] and [Cancellation.ack]
