@@ -6,12 +6,12 @@
 <main role="main" class="container">
     <div class="mb-3 float-start form-check">
         <input class="form-check-input" type="checkbox" value="" id="filter" checked
-               onclick="hideInactive(this, document.getElementById('contracts'))">
+               onchange="filterContracts()">
         <label class="form-check-label" for="filter" th:text="#{action.hideInactive}">Hide inactive</label>
     </div>
     <div class="row mb-3 float-end">
         <input type="text" class="form-control" size="20" id="search" th:placeholder="#{action.search}"
-               onkeyup="filter(this, document.getElementById('contracts'))">
+               oninput="filterContracts()">
     </div>
     <table class="table table-hover" id="contracts">
         <thead>

@@ -24,39 +24,21 @@
 
 <div xmlns:th="http://www.thymeleaf.org" th:fragment="filterTable">
     <script>
-        function filter(input, table) {
-            search = input.value.toLowerCase();
-            rows = table.getElementsByTagName('tr');
-            for (i = 0; i < rows.length; i++) {
-                if (rows[i].id == 'tableHeader') {
-                    continue;
-                }
-                rows[i].style.display = 'none';
-                cols = rows[i].getElementsByTagName('td');
-                for (j = 0; j < cols.length; j++) {
-                    var text = cols[j].textContent.toLowerCase();
-                    if (text.indexOf(search) >= 0) {
-                        rows[i].style.display = '';
-                        break;
-                    }
-                }
+        // Applies both the "hide inactive" checkbox and the search text: a row is shown only if it passes both
+        function filterContracts() {
+            const hideInactive = document.getElementById('filter').checked;
+            const search = document.getElementById('search').value.toLowerCase();
+            const rows = document.querySelectorAll('#contracts tbody tr');
+            for (const row of rows) {
+                const active = !row.classList.contains('inactive');
+                const matches = Array.from(row.getElementsByTagName('td'))
+                    .some(col => col.textContent.toLowerCase().includes(search));
+                row.style.display = (active || !hideInactive) && matches ? '' : 'none';
             }
         }
 
-        function hideInactive(input, table) {
-            hide = input.checked;
-            rows = table.getElementsByTagName('tr');
-            for (i = 0; i < rows.length; i++) {
-                if (rows[i].id == 'tableHeader') {
-                    continue;
-                }
-                if (hide && rows[i].classList.contains('inactive')) {
-                    rows[i].style.display = 'none';
-                } else {
-                    rows[i].style.display = '';
-                }
-            }
-        }
+        // the browser may restore the checkbox and search text when navigating back to this page
+        window.addEventListener('pageshow', filterContracts);
     </script>
 </div>
 

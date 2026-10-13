@@ -28,7 +28,7 @@
     <div class="container">
         <div class="navbar-brand me-5">
             <i class="bi bi-pencil-square text-light me-2" style="font-size: 1.5rem;"></i>
-            <a class="navbar-brand" href="/" style="font-size: 1.5rem;">ContractsMS</a>
+            <a class="navbar-brand" th:href="@{/}" style="font-size: 1.5rem;">ContractsMS</a>
         </div>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMenu"
                 aria-controls="navbarMenu" aria-expanded="false" aria-label="Toggle navigation">
@@ -37,7 +37,7 @@
         <div class="collapse navbar-collapse" id="navbarMenu">
             <ul class="navbar-nav me-auto mb-2 mb-md-0">
                 <li class="nav-item">
-                    <a class="nav-link" href="/" th:classappend="${activeTab == 'home'} ? 'active'"
+                    <a class="nav-link" th:href="@{/}" th:classappend="${activeTab == 'home'} ? 'active'"
                        th:text="#{nav.home}">Home</a>
                 </li>
                 <li class="nav-item" th:if="${#httpServletRequest.remoteUser}">
