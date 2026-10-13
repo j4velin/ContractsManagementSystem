@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html xmlns:th="https://www.thymeleaf.org">
-<head th:replace="fragments/header :: head"></head>
+<head th:replace="~{fragments/header :: head}"></head>
 <body>
-<nav th:replace="fragments/header :: nav('contracts')"></nav>
+<nav th:replace="~{fragments/header :: nav('contracts')}"></nav>
 <main role="main" class="container">
     <div class="mb-3 float-start form-check">
         <input class="form-check-input" type="checkbox" value="" id="filter" checked
@@ -74,8 +74,8 @@
     </table>
     <a th:href="@{/contracts/add}" class="btn btn-primary mt-4" th:text="#{contract.action.add}">Add Contract</a>
 </main>
-<div th:replace="fragments/footer :: footer"></div>
-<div th:replace="fragments/scripts :: filterTable"></div>
-<div th:replace="fragments/scripts :: tooltips"></div>
+<div th:replace="~{fragments/footer :: footer}"></div>
+<div th:replace="~{fragments/scripts :: filterTable}"></div>
+<div th:replace="~{fragments/scripts :: tooltips}"></div>
 </body>
 </html>

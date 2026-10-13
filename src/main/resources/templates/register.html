@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="https://www.thymeleaf.org">
-<head th:replace="fragments/header :: head"></head>
+<head th:replace="~{fragments/header :: head}"></head>
 <body>
-<nav th:replace="fragments/header :: nav('register')"></nav>
+<nav th:replace="~{fragments/header :: nav('register')}"></nav>
 <main role="main" class="container" style="max-width: 330px;">
     <div class="alert alert-danger" th:if="${error}" th:text="#{${error}}"></div>
     <form th:action="@{/register}" method="post" class="needs-validation" novalidate>
@@ -23,7 +23,7 @@
                     class="btn btn-lg btn-primary mt-4"/></div>
     </form>
 </main>
-<div th:replace="fragments/footer :: footer"></div>
-<div th:replace="fragments/scripts :: formvalidation"></div>
+<div th:replace="~{fragments/footer :: footer}"></div>
+<div th:replace="~{fragments/scripts :: formvalidation}"></div>
 </body>
 </html>

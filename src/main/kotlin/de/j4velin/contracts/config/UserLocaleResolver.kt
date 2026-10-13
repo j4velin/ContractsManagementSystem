@@ -2,11 +2,11 @@ package de.j4velin.contracts.config
 
 import de.j4velin.contracts.user.data.User
 import de.j4velin.contracts.user.data.UsersRepository
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.servlet.i18n.SessionLocaleResolver
 import java.util.*
-import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
 
 /**
  * Resolves the locale in this order: the locale chosen in the current session (e.g. via the `locale` request
@@ -17,12 +17,13 @@ import javax.servlet.http.HttpServletResponse
  */
 class UserLocaleResolver(private val usersRepository: UsersRepository) : SessionLocaleResolver() {
 
-    /**
-     * Used by both [resolveLocale] and [resolveLocaleContext] (and therefore also by
-     * [org.springframework.context.i18n.LocaleContextHolder]) when no locale is set in the session
-     */
-    override fun determineDefaultLocale(request: HttpServletRequest): Locale =
-        currentUser()?.let { Locale.forLanguageTag(it.locale) } ?: super.determineDefaultLocale(request)
+    init {
+        // Used by both resolveLocale and resolveLocaleContext (and therefore also by LocaleContextHolder) when no
+        // locale is set in the session
+        setDefaultLocaleFunction { request ->
+            currentUser()?.let { Locale.forLanguageTag(it.locale) } ?: defaultLocale ?: request.locale
+        }
+    }
 
     override fun setLocale(request: HttpServletRequest, response: HttpServletResponse?, locale: Locale?) {
         super.setLocale(request, response, locale)

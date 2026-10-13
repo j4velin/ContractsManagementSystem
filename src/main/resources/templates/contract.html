@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html xmlns:th="https://www.thymeleaf.org">
-<head th:replace="fragments/header :: head"></head>
+<head th:replace="~{fragments/header :: head}"></head>
 <body>
-<nav th:replace="fragments/header :: nav('contracts')"></nav>
+<nav th:replace="~{fragments/header :: nav('contracts')}"></nav>
 <main role="main" class="container" style="max-width: 330px;">
     <form th:action="${contract} ? @{/contracts/{id}(id=${contract.id})} : @{/contracts}" method="post"
           class="needs-validation" novalidate>
@@ -44,14 +44,14 @@
                      th:classappend="${contract} and ${contract.cancellation.hasCancellationInfo()} ? 'show' : 'collapse'"
                      aria-labelledby="cancelHeader">
                     <div class="accordion-body">
-                        <div th:replace="fragments/components :: period(#{contract.cancellation.minDuration}, 'minDuration',
-                        ${contract} ? ${contract.cancellation.minDuration} : null)">
+                        <div th:replace="~{fragments/components :: period(#{contract.cancellation.minDuration}, 'minDuration',
+                        ${contract} ? ${contract.cancellation.minDuration} : null)}">
                         </div>
-                        <div th:replace="fragments/components :: period(#{contract.cancellation.extensionPeriod}, 'extendPeriod',
-                        ${contract} ? ${contract.cancellation.extendPeriod} : null)">
+                        <div th:replace="~{fragments/components :: period(#{contract.cancellation.extensionPeriod}, 'extendPeriod',
+                        ${contract} ? ${contract.cancellation.extendPeriod} : null)}">
                         </div>
-                        <div th:replace="fragments/components :: period(#{contract.cancellation.noticePeriod}, 'noticePeriod',
-                        ${contract} ? ${contract.cancellation.noticePeriod} : null)">
+                        <div th:replace="~{fragments/components :: period(#{contract.cancellation.noticePeriod}, 'noticePeriod',
+                        ${contract} ? ${contract.cancellation.noticePeriod} : null)}">
                         </div>
                         <div class="mb-3">
                             <input class="form-check-input" type="checkbox" value="" id="canceled"
@@ -112,7 +112,7 @@
     </form>
     <form th:if="${contract}" id="deleteForm" method="post" th:action="@{/contracts/{id}/delete(id=${contract.id})}"></form>
 </main>
-<div th:replace="fragments/footer :: footer"></div>
-<div th:replace="fragments/scripts :: formvalidation"></div>
+<div th:replace="~{fragments/footer :: footer}"></div>
+<div th:replace="~{fragments/scripts :: formvalidation}"></div>
 </body>
 </html>

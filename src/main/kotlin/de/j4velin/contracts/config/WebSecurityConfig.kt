@@ -1,5 +1,6 @@
 package de.j4velin.contracts.config
 
+import jakarta.servlet.DispatcherType
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -34,7 +35,7 @@ class WebSecurityConfig(
     @Bean
     @Order(1)
     fun staticResourcesFilterChain(http: HttpSecurity): SecurityFilterChain {
-        http.requestMatchers { it.antMatchers("/webjars/**", "/favicon.svg", "/images/*") }
+        http.securityMatcher("/webjars/**", "/favicon.svg", "/images/*")
             .authorizeHttpRequests { it.anyRequest().permitAll() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .csrf { it.disable() }
@@ -48,7 +49,10 @@ class WebSecurityConfig(
     @Order(2)
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         http.authorizeHttpRequests {
-            it.antMatchers("/", "/register", "/login", "/about").permitAll()
+            // forwards and error dispatches render the response of a request that was already authorized (or the
+            // error page for one that wasn't)
+            it.dispatcherTypeMatchers(DispatcherType.FORWARD, DispatcherType.ERROR).permitAll()
+                .requestMatchers("/", "/register", "/login", "/about").permitAll()
                 .anyRequest().authenticated()
         }
             .formLogin { it.loginPage("/login").permitAll() }
