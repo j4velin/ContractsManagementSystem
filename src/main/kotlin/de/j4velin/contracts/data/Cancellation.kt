@@ -5,6 +5,9 @@ import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDate
 import java.time.Period
+import java.time.temporal.ChronoUnit
+import kotlin.math.ceil
+import kotlin.math.max
 
 /**
  * Data class representing the cancellation data of a [Contract]
@@ -75,6 +78,11 @@ data class Cancellation(
         internal const val MAX_PERIOD_AMOUNT = 999
 
         /**
+         * Average length of a month in the Gregorian calendar (146097 days per 400 years = 4800 months)
+         */
+        private const val AVERAGE_DAYS_PER_MONTH = 146097.0 / 4800
+
+        /**
          * Toggles the [Cancellation.canceled] state. Might also affect [Cancellation.endDate] and [Cancellation.ack]
          * properties
          *
@@ -83,14 +91,17 @@ data class Cancellation(
          * @return the modified [Contract]
          */
         fun toggleCancel(contract: Contract, newAck: Boolean = false): Contract {
-            var endDate = contract.cancellation.endDate
-            if (endDate == null && !contract.cancellation.canceled) {
-                // -> now canceling -> set end date the same as the next possible end date
-                endDate = contract.cancellation.getNextPossibleEndDate(contract.startDate, LocalDate.now())
+            val cancellation = contract.cancellation
+            val newCancellation = if (cancellation.canceled) {
+                // now un-canceling -> also clear the end date: a set end date implies 'canceled' (see fromDTO), and the
+                // next possible end date has to be calculated again instead of staying frozen at the old value
+                cancellation.copy(canceled = false, endDate = null, ack = false)
+            } else {
+                // now canceling -> set end date the same as the next possible end date, if not set yet
+                val endDate = cancellation.endDate
+                    ?: cancellation.getNextPossibleEndDate(contract.startDate, LocalDate.now())
+                cancellation.copy(canceled = true, endDate = endDate, ack = newAck)
             }
-            // now canceling? -> set ack to parameter value. Now un-canceling? -> set ack to 'false'
-            val newCancellation =
-                contract.cancellation.copy(canceled = !contract.cancellation.canceled, endDate = endDate, ack = newAck)
             return contract.copy(cancellation = newCancellation)
         }
 
@@ -114,7 +125,8 @@ data class Cancellation(
     /**
      * @return true, if any cancellation information is set
      */
-    fun hasCancellationInfo() = minDuration != null || noticePeriod != null || canceled || endDate != null
+    fun hasCancellationInfo() =
+        minDuration != null || noticePeriod != null || extendPeriod != null || canceled || endDate != null
 
     /**
      * Calculates the next date at which the contract can end, if it is canceled now.
@@ -122,9 +134,13 @@ data class Cancellation(
      * If [extendPeriod] is null (e.g. the user left the extension empty, or the stored document has no value), the
      * contract is assumed to renew by [minDuration], the same as the constructor default.
      *
-     * If the extension period can not move the term end forward (e.g. zero, negative or mixed periods like
-     * "P1M-40D"), the contract is treated as having no automatic renewal: once the minimum duration has passed, it
+     * If the extension period can not move the term end forward (zero, negative or mixed periods with a negative part
+     * like "P1M-40D"), the contract is treated as having no automatic renewal: once the minimum duration has passed, it
      * can end as soon as the notice period allows.
+     *
+     * The term ends are always calculated from the contract's start instead of adding the extension to the previous
+     * term end, so they don't drift at the end of a month: starting on Jan 31 with a minimum duration of one month and
+     * a monthly extension, the terms end on Feb 29, Mar 31, Apr 30, ... instead of Feb 29, Mar 29, Apr 29, ...
      *
      * @param startDate the contract's start date, if known
      * @param now LocalDate.now() (parameterized for testing)
@@ -142,20 +158,71 @@ data class Cancellation(
             possibleEnd = possibleEnd.plus(noticePeriod)
         }
         if (startDate != null && minDuration != null) {
-            val extension = extendPeriod ?: minDuration
-            var nextTermEnd = startDate.plus(minDuration)
-            while (nextTermEnd.isBefore(possibleEnd)) {
-                val next = nextTermEnd.plus(extension)
-                if (!next.isAfter(nextTermEnd)) {
-                    // The extension can not move the term end forward, so it would loop forever. Treat the contract
-                    // as not renewing: the minimum duration is over, so it can end once the notice period elapsed.
-                    return possibleEnd
-                }
-                nextTermEnd = next
-            }
-            possibleEnd = nextTermEnd
+            possibleEnd = getFirstTermEndNotBefore(startDate, minDuration, extendPeriod ?: minDuration, possibleEnd)
         }
         return possibleEnd
+    }
+
+    /**
+     * Finds the first end of a contract term, which is not before the given target date.
+     *
+     * The first term ends after [minDuration], the n-th renewal ends n times [extension] later. Instead of stepping
+     * through all the terms, n is estimated from the average length of the extension and then corrected by at most a
+     * few steps, so this stays fast even for a contract started centuries ago, which renews daily.
+     *
+     * @param startDate the contract's start date
+     * @param minDuration the minimum duration of the contract
+     * @param extension the period by which the contract is extended, if not canceled in time
+     * @param target the earliest date at which the contract may end
+     * @return the first term end, which is not before [target], or [target] itself, if the first term is over and the
+     * extension can not move the term end forward
+     */
+    private fun getFirstTermEndNotBefore(
+        startDate: LocalDate,
+        minDuration: Period,
+        extension: Period,
+        target: LocalDate
+    ): LocalDate {
+        val firstTermEnd = startDate.plus(minDuration)
+        if (!firstTermEnd.isBefore(target)) {
+            return firstTermEnd
+        }
+        if (extension.isZero || extension.isNegative) {
+            // The extension can not move the term end forward (Period.isNegative is true if any part is negative).
+            // Treat the contract as not renewing: the minimum duration is over, so it can end once the notice period
+            // elapsed.
+            return target
+        }
+        // LocalDate.plus(Period) adds the months first, then the days. If the minimum duration has no days part, count
+        // all months from the start date, so that the end of a month is kept (Jan 31 + 1 + n months is always the last
+        // day of a month). Otherwise, count the extensions from the end of the first term.
+        val anchor: LocalDate
+        val anchorMonths: Long
+        if (minDuration.days == 0) {
+            anchor = startDate
+            anchorMonths = minDuration.toTotalMonths()
+        } else {
+            anchor = firstTermEnd
+            anchorMonths = 0
+        }
+        val extensionMonths = extension.toTotalMonths()
+        val extensionDays = extension.days.toLong()
+
+        // strictly increasing in n, as no part of the extension is negative and at least one is positive
+        fun termEnd(n: Long): LocalDate =
+            anchor.plusMonths(anchorMonths + n * extensionMonths).plusDays(n * extensionDays)
+
+        // the actual length of n months differs from n average months by only a few days, so the estimate is off by
+        // at most a step or two
+        val averageExtensionDays = extensionMonths * AVERAGE_DAYS_PER_MONTH + extensionDays
+        var n = max(1L, ceil(ChronoUnit.DAYS.between(firstTermEnd, target) / averageExtensionDays).toLong())
+        while (n > 1 && !termEnd(n - 1).isBefore(target)) {
+            n--
+        }
+        while (termEnd(n).isBefore(target)) {
+            n++
+        }
+        return termEnd(n)
     }
 
     /**

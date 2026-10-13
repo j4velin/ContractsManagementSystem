@@ -209,6 +209,188 @@ class CancellationTest {
     }
 
     @Test
+    fun `test toggle cancel twice clears the end date`() {
+        val cancelInfo = Cancellation(noticePeriod = Period.ofDays(1))
+        val contract = Contract("id", "type", "company", cancellation = cancelInfo)
+        val canceled = Cancellation.toggleCancel(contract)
+        assertNotNull(canceled.cancellation.endDate)
+        assertNull(canceled.cancellation.getLatestPossibleCancelDate(null, today))
+
+        val unCanceled = Cancellation.toggleCancel(canceled)
+        assertFalse(unCanceled.cancellation.canceled)
+        assertFalse(unCanceled.cancellation.ack)
+        assertNull(unCanceled.cancellation.endDate)
+        // the dates are calculated again instead of being frozen at the end date set when canceling
+        assertEquals(today, unCanceled.cancellation.getLatestPossibleCancelDate(null, today))
+        assertEquals(today.plusDays(1), unCanceled.cancellation.getNextPossibleEndDate(null, today))
+        // and the contract is back in its original state
+        assertEquals(contract, unCanceled)
+    }
+
+    @Test
+    fun `test toggle cancel on acknowledged cancellation clears end date and ack`() {
+        val startDate = LocalDate.of(2020, 3, 15)
+        val cancelInfo = Cancellation(noticePeriod = Period.ofMonths(1), minDuration = Period.ofYears(1))
+        val contract = Contract("id", "type", "company", startDate = startDate, cancellation = cancelInfo)
+        val canceled = Cancellation.toggleCancelAck(contract)
+        assertTrue(canceled.cancellation.canceled)
+        assertTrue(canceled.cancellation.ack)
+
+        val unCanceled = Cancellation.toggleCancel(canceled)
+        assertFalse(unCanceled.cancellation.canceled)
+        assertFalse(unCanceled.cancellation.ack)
+        assertNull(unCanceled.cancellation.endDate)
+        assertEquals(LocalDate.of(2022, 2, 15), unCanceled.cancellation.getLatestPossibleCancelDate(startDate, today))
+    }
+
+    @Test
+    fun `test toggle cancel keeps a manually set end date`() {
+        val endDate = LocalDate.of(2030, 6, 30)
+        // not possible through the form (a set end date implies 'canceled'), but might exist in the database
+        val cancelInfo = Cancellation(noticePeriod = Period.ofDays(1), endDate = endDate, canceled = false)
+        val contract = Contract("id", "type", "company", cancellation = cancelInfo)
+        val canceled = Cancellation.toggleCancel(contract)
+        assertTrue(canceled.cancellation.canceled)
+        assertEquals(endDate, canceled.cancellation.endDate)
+    }
+
+    @Test
+    fun `test getNextPossibleEndDate keeps the end of the month`() {
+        val startDate = LocalDate.of(2024, 1, 31)
+        val cancelInfo = Cancellation(minDuration = Period.ofMonths(1), extendPeriod = Period.ofMonths(1))
+
+        fun termEndAfter(date: LocalDate) = cancelInfo.getNextPossibleEndDate(startDate, date.plusDays(1))
+
+        assertEquals(LocalDate.of(2024, 2, 29), termEndAfter(LocalDate.of(2024, 1, 31)))
+        assertEquals(LocalDate.of(2024, 3, 31), termEndAfter(LocalDate.of(2024, 2, 29)))
+        // used to be Apr 29 and May 29, as each term end was calculated from the previous one
+        assertEquals(LocalDate.of(2024, 4, 30), termEndAfter(LocalDate.of(2024, 3, 31)))
+        assertEquals(LocalDate.of(2024, 5, 31), termEndAfter(LocalDate.of(2024, 4, 30)))
+        assertEquals(LocalDate.of(2025, 2, 28), termEndAfter(LocalDate.of(2025, 1, 31)))
+        assertEquals(LocalDate.of(2025, 3, 31), termEndAfter(LocalDate.of(2025, 2, 28)))
+    }
+
+    @Test
+    fun `test latest cancel date keeps the end of the month`() {
+        val startDate = LocalDate.of(2024, 1, 31)
+        val cancelInfo = Cancellation(
+            minDuration = Period.ofYears(1),
+            noticePeriod = Period.ofMonths(1),
+            extendPeriod = Period.ofMonths(1)
+        )
+        // first term ends 2025-01-31, then monthly: 2025-02-28, 2025-03-31, 2025-04-30, 2025-05-31, ...
+        val march = LocalDate.of(2025, 3, 30)
+        assertEquals(LocalDate.of(2025, 4, 30), cancelInfo.getNextPossibleEndDate(startDate, march))
+        assertEquals(LocalDate.of(2025, 3, 30), cancelInfo.getLatestPossibleCancelDate(startDate, march))
+        val april = LocalDate.of(2025, 4, 1)
+        assertEquals(LocalDate.of(2025, 5, 31), cancelInfo.getNextPossibleEndDate(startDate, april))
+        assertEquals(LocalDate.of(2025, 4, 30), cancelInfo.getLatestPossibleCancelDate(startDate, april))
+    }
+
+    @Test
+    fun `test getNextPossibleEndDate with yearly terms starting on a leap day`() {
+        val startDate = LocalDate.of(2024, 2, 29)
+        val cancelInfo = Cancellation(minDuration = Period.ofYears(1))
+
+        assertEquals(LocalDate.of(2025, 2, 28), cancelInfo.getNextPossibleEndDate(startDate, LocalDate.of(2024, 6, 1)))
+        assertEquals(LocalDate.of(2027, 2, 28), cancelInfo.getNextPossibleEndDate(startDate, LocalDate.of(2026, 10, 13)))
+        // used to be 2028-02-28, as each term end was calculated from the previous one
+        assertEquals(LocalDate.of(2028, 2, 29), cancelInfo.getNextPossibleEndDate(startDate, LocalDate.of(2027, 6, 1)))
+        assertEquals(LocalDate.of(2028, 2, 29), cancelInfo.getNextPossibleEndDate(startDate, LocalDate.of(2028, 2, 29)))
+        assertEquals(LocalDate.of(2029, 2, 28), cancelInfo.getNextPossibleEndDate(startDate, LocalDate.of(2028, 3, 1)))
+    }
+
+    @Test
+    fun `test getNextPossibleEndDate with min duration in days and monthly extension`() {
+        val startDate = LocalDate.of(2024, 1, 25)
+        val cancelInfo = Cancellation(minDuration = Period.ofDays(10), extendPeriod = Period.ofMonths(1))
+
+        // first term ends on Feb 4th, then renews monthly from there
+        assertEquals(LocalDate.of(2024, 2, 4), cancelInfo.getNextPossibleEndDate(startDate, LocalDate.of(2024, 2, 1)))
+        assertEquals(LocalDate.of(2024, 4, 4), cancelInfo.getNextPossibleEndDate(startDate, LocalDate.of(2024, 3, 10)))
+    }
+
+    @Test
+    fun `test getNextPossibleEndDate matches stepping through all terms`() {
+        val periods = listOf(
+            Period.ofDays(1), Period.ofDays(10), Period.ofWeeks(1), Period.ofWeeks(6), Period.ofMonths(1),
+            Period.ofMonths(3), Period.ofMonths(13), Period.ofYears(1), Period.ofYears(4), Period.of(1, 2, 3)
+        )
+        val starts = generateSequence(LocalDate.of(2019, 12, 28)) { it.plusDays(11) }.takeWhile { it.year < 2022 }
+        val nows = listOf(LocalDate.of(2021, 8, 22), LocalDate.of(2024, 2, 29), LocalDate.of(2031, 1, 31))
+        for (start in starts) {
+            for (min in periods) {
+                for (extension in periods) {
+                    for (now in nows) {
+                        val cancelInfo = Cancellation(minDuration = min, extendPeriod = extension)
+                        assertEquals(
+                            naiveNextPossibleEndDate(start, min, extension, now),
+                            cancelInfo.getNextPossibleEndDate(start, now),
+                            "start=$start min=$min extension=$extension now=$now"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Reference implementation: steps through the terms one by one, each calculated from the start of the contract
+     */
+    private fun naiveNextPossibleEndDate(start: LocalDate, min: Period, extension: Period, now: LocalDate): LocalDate {
+        var n = 0
+        while (true) {
+            val termEnd = if (min.days == 0) {
+                start.plus(min.plus(extension.multipliedBy(n)))
+            } else {
+                start.plus(min).plus(extension.multipliedBy(n))
+            }
+            if (!termEnd.isBefore(now)) {
+                return termEnd
+            }
+            n++
+        }
+    }
+
+    @Test
+    fun `test getNextPossibleEndDate is fast for long running contracts with short terms`() {
+        val startDate = LocalDate.of(1000, 1, 1)
+        val now = LocalDate.of(2026, 10, 13)
+        val daily = Cancellation(minDuration = Period.ofDays(1), extendPeriod = Period.ofDays(1))
+        val dailyWithNotice =
+            Cancellation(minDuration = Period.ofDays(1), extendPeriod = Period.ofDays(1), noticePeriod = Period.ofWeeks(1))
+        val monthly = Cancellation(minDuration = Period.ofMonths(1), extendPeriod = Period.ofMonths(1))
+
+        // used to take ~375,000 iterations per call. Called many times, as the list view sorts and shows all contracts
+        val results = assertTimeoutPreemptively(Duration.ofMillis(100)) {
+            (1..1000).map {
+                listOf(
+                    daily.getNextPossibleEndDate(startDate, now),
+                    dailyWithNotice.getNextPossibleEndDate(startDate, now),
+                    dailyWithNotice.getLatestPossibleCancelDate(startDate, now),
+                    monthly.getNextPossibleEndDate(startDate, now)
+                )
+            }.distinct()
+        }
+
+        assertEquals(
+            listOf(listOf(now, LocalDate.of(2026, 10, 20), now, LocalDate.of(2026, 11, 1))),
+            results
+        )
+    }
+
+    @Test
+    fun `test hasCancellationInfo`() {
+        assertFalse(Cancellation().hasCancellationInfo())
+        assertTrue(Cancellation(minDuration = Period.ofMonths(1)).hasCancellationInfo())
+        assertTrue(Cancellation(noticePeriod = Period.ofMonths(1)).hasCancellationInfo())
+        // only an extension period set -> the edit form must still show the cancellation section
+        assertTrue(Cancellation(extendPeriod = Period.ofMonths(1)).hasCancellationInfo())
+        assertTrue(Cancellation(endDate = today).hasCancellationInfo())
+        assertTrue(Cancellation(canceled = true).hasCancellationInfo())
+    }
+
+    @Test
     fun `test toggle cancel ack`() {
         val cancelInfo = Cancellation(noticePeriod = Period.ofDays(1))
         assertFalse(cancelInfo.canceled)
