@@ -5,7 +5,12 @@ import de.j4velin.contracts.user.data.User
 import de.j4velin.contracts.user.data.UsersRepository
 import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.not
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
 import org.mockito.BDDMockito.given
 import org.mockito.Mockito.never
@@ -14,13 +19,21 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
 import org.springframework.context.annotation.Import
 import org.springframework.dao.DuplicateKeyException
+import org.springframework.mock.web.MockHttpSession
 import org.springframework.security.core.userdetails.UserDetailsService
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user
+import org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated
+import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.model
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.view
 
@@ -39,13 +52,79 @@ class UserControllerTest {
     @MockitoBean
     private lateinit var userDetailsService: UserDetailsService
 
+    // the bean from WebSecurityConfig, which is also used for the login
+    @Autowired
+    private lateinit var passwordEncoder: PasswordEncoder
+
+    private fun registerRequest(username: String = "alice", mail: String = "alice@example.com", password: String = "s3cret") =
+        post("/register").with(csrf())
+            .param("username", username)
+            .param("mail", mail)
+            .param("password", password)
+
     private fun register(username: String = "alice", mail: String = "alice@example.com", password: String = "s3cret") =
-        mockMvc.perform(
-            post("/register").with(csrf())
-                .param("username", username)
-                .param("mail", mail)
-                .param("password", password)
-        )
+        mockMvc.perform(registerRequest(username, mail, password))
+
+    /**
+     * Lets the repository mock store the saved user, so that the login after the registration finds it
+     */
+    private fun saveUsers() {
+        var saved: User? = null
+        given(repository.save(any(User::class.java))).willAnswer { invocation ->
+            invocation.getArgument<User>(0).also { saved = it }
+        }
+        given(userDetailsService.loadUserByUsername("alice")).willAnswer { saved }
+    }
+
+    private fun MockHttpServletRequestBuilder.asLoggedInUser() = with(user("bob"))
+
+    @Test
+    fun `registration saves the user with the encoded password and logs in`() {
+        saveUsers()
+        register()
+            .andExpect(redirectedUrl("/"))
+            .andExpect(authenticated().withUsername("alice"))
+        val captor = ArgumentCaptor.forClass(User::class.java)
+        verify(repository).save(captor.capture())
+        val user = captor.value
+        assertEquals("alice", user.username)
+        assertEquals("alice@example.com", user.mail)
+        assertNotEquals("s3cret", user.password)
+        assertTrue(passwordEncoder.matches("s3cret", user.password))
+    }
+
+    @Test
+    fun `registration changes the session id and replaces the CSRF token`() {
+        saveUsers()
+        val session = MockHttpSession()
+        val sessionIdBefore = session.id
+        mockMvc.perform(registerRequest().session(session))
+            .andExpect(redirectedUrl("/"))
+            .andExpect(authenticated().withUsername("alice"))
+        assertNotEquals(sessionIdBefore, session.id)
+        // the CSRF token used for the registration is removed, the next form gets a new one
+        assertNull(session.getAttribute(CSRF_TOKEN_ATTRIBUTE))
+    }
+
+    @Test
+    fun `registration form is shown to anonymous users`() {
+        mockMvc.perform(get("/register"))
+            .andExpect(status().isOk)
+            .andExpect(view().name("register"))
+    }
+
+    @Test
+    fun `logged in users are redirected from the registration form`() {
+        mockMvc.perform(get("/register").asLoggedInUser())
+            .andExpect(redirectedUrl("/contracts"))
+    }
+
+    @Test
+    fun `logged in users can't register another user`() {
+        mockMvc.perform(registerRequest().asLoggedInUser())
+            .andExpect(redirectedUrl("/contracts"))
+        verify(repository, never()).save(any())
+    }
 
     @Test
     fun `blank fields are rejected without saving`() {
@@ -92,5 +171,9 @@ class UserControllerTest {
                 .param("mail", "")
                 .param("password", "")
         ).andExpect(content().string(containsString("Bitte alle Felder ausfüllen")))
+    }
+
+    private companion object {
+        val CSRF_TOKEN_ATTRIBUTE = HttpSessionCsrfTokenRepository::class.java.name + ".CSRF_TOKEN"
     }
 }
