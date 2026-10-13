@@ -43,10 +43,11 @@ class ContractsControllerTest {
     @MockBean
     private lateinit var usersRepository: UsersRepository
 
-    private val testUser = User(id = "user1", username = "alice", password = "secret", mail = "alice@example.com")
+    private val testUserId = "user1"
+    private val testUser = User(id = testUserId, username = "alice", password = "secret", mail = "alice@example.com")
 
     private fun testContract() =
-        Contract(testUser.id, "type", "company", bonus = Bonus(description = "bonus")).withId("c1")
+        Contract(testUserId, "type", "company", bonus = Bonus(description = "bonus")).withId("c1")
 
     @ParameterizedTest
     @ValueSource(strings = ["delete", "toggleCancel", "toggleCancelAck", "toggleBonus"])
@@ -83,7 +84,7 @@ class ContractsControllerTest {
 
     @Test
     fun `contracts page renders toggles as POST forms with CSRF token`() {
-        given(repository.findByUserId(testUser.id)).willReturn(listOf(testContract()))
+        given(repository.findByUserId(testUserId)).willReturn(listOf(testContract()))
         val result = mockMvc.perform(get("/contracts").with(user(testUser)))
             .andExpect(status().isOk)
         listOf("toggleBonus", "toggleCancel", "toggleCancelAck").forEach {
