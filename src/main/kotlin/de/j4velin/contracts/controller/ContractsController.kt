@@ -21,7 +21,7 @@ class ContractsController(private val repository: ContractsRepository) {
     fun getContracts(model: Model, @AuthenticationPrincipal user: User): String {
         model.addAttribute(
             "contracts",
-            repository.findByUserId(user.id).sorted()
+            repository.findByUserId(user.requireId()).sorted()
         )
         return "contracts"
     }
@@ -38,7 +38,7 @@ class ContractsController(private val repository: ContractsRepository) {
 
     @PostMapping("/contracts")
     fun addContract(contractDto: ContractDTO, @AuthenticationPrincipal user: User): String {
-        val contract = Contract(contractDto, user.id)
+        val contract = Contract(contractDto, user.requireId())
         repository.save(contract)
         return "redirect:/contracts"
     }
@@ -84,7 +84,7 @@ class ContractsController(private val repository: ContractsRepository) {
         @AuthenticationPrincipal user: User
     ): String {
         getContract(id, user) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
-        val contract = Contract(contractDto, user.id).withId(id)
+        val contract = Contract(contractDto, user.requireId()).withId(id)
         repository.save(contract)
         return "redirect:/contracts"
     }
@@ -98,7 +98,7 @@ class ContractsController(private val repository: ContractsRepository) {
         val contract = repository.findById(id)
         return if (!contract.isPresent) {
             null
-        } else if (contract.get().userId != user.id) {
+        } else if (contract.get().userId != user.requireId()) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to access this item")
         } else {
             contract.get().withId(id)

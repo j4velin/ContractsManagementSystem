@@ -9,7 +9,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 
 @Document
 data class User(
-    @Id val id: String,
+    /**
+     * The MongoDB document id. Must be `null` for a user which has not been persisted yet, so that Spring Data
+     * treats it as new and MongoDB generates a unique id on insert.
+     */
+    @Id val id: String? = null,
     @Indexed(unique = true) private val username: String,
     private val password: String,
     val mail: String,
@@ -25,11 +29,17 @@ data class User(
     override fun isEnabled() = true
 
     /**
+     * @return the id of this (persisted) user
+     * @throws IllegalStateException if this user has not been persisted yet and therefore has no id
+     */
+    fun requireId(): String = checkNotNull(id) { "User '$username' has no id - has it been persisted?" }
+
+    /**
      * Constructs an [User] from an [UserDTO]
      * @param data the DTO data
      */
     constructor(data: UserDTO) : this(
-        id = "", username = data.username, password = BCryptPasswordEncoder().encode(data.password), mail = data.mail
+        username = data.username, password = BCryptPasswordEncoder().encode(data.password), mail = data.mail
     )
 }
 
