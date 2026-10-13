@@ -98,11 +98,17 @@ class CancellationFromDtoTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = ["-1", "1.5", "1,5", "abc", "1e3", "+1", "0x10", "99999999999"])
+    @ValueSource(strings = ["-1", "1.5", "1,5", "abc", "1e3", "+1", "0x10", "1000", "99999999999"])
     fun `invalid values are rejected with bad request`(value: String) {
         assertBadRequest { Cancellation.fromDTO(dto(minDurationValue = value, minDurationUnit = 'M')) }
         assertBadRequest { Cancellation.fromDTO(dto(noticePeriodValue = value, noticePeriodUnit = 'D')) }
         assertBadRequest { Cancellation.fromDTO(dto(extendPeriodValue = value, extendPeriodUnit = 'Y')) }
+    }
+
+    @Test
+    fun `maximum value is accepted`() {
+        val cancellation = Cancellation.fromDTO(dto(minDurationValue = "999", minDurationUnit = 'Y'))
+        assertEquals(Period.ofYears(Cancellation.MAX_PERIOD_AMOUNT), cancellation.minDuration)
     }
 
     @Test
@@ -134,6 +140,13 @@ class CancellationFromDtoTest {
     @ValueSource(strings = ["garbage", "2021-13-01", "22.08.2021", "2021-02-30"])
     fun `malformed end date is rejected with bad request`(value: String) {
         assertBadRequest { Cancellation.fromDTO(dto(endDate = value)) }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["+999999999-12-31", "+10000-01-01", "0999-12-31", "-0001-01-01"])
+    fun `dates outside of four-digit years are rejected with bad request`(value: String) {
+        assertBadRequest { Cancellation.fromDTO(dto(endDate = value)) }
+        assertBadRequest { Contract(dto(startDate = value), "user") }
     }
 
     @ParameterizedTest
