@@ -18,6 +18,8 @@ services:
       SPRING_DATA_MONGODB_AUTO_INDEX_CREATION: "true"
       # contracts.remember-me.key; if empty, remembered logins don't survive a restart of the app
       CONTRACTS_REMEMBERME_KEY: ${REMEMBER_ME_KEY:-}
+      # behind a reverse proxy: use its X-Forwarded-* headers, so redirects keep https and the public host
+      SERVER_FORWARD_HEADERS_STRATEGY: ${FORWARD_HEADERS_STRATEGY:-native}
 
   mongo:
     image: mongo:8.0
