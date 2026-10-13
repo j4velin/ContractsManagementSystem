@@ -4,16 +4,16 @@
 <body>
 <nav th:replace="fragments/header :: nav('register')"></nav>
 <main role="main" class="container" style="max-width: 330px;">
-    <div class="alert alert-danger" th:if="${error}" th:text="${error}"></div>
+    <div class="alert alert-danger" th:if="${error}" th:text="#{${error}}"></div>
     <form th:action="@{/register}" method="post" class="needs-validation" novalidate>
         <h3 class="mb-4 fw-normal" th:text="#{register.title}">Register new account</h3>
         <div class="mb-3">
             <label for="username" class="form-label" th:text="#{login.username}">Username</label>
-            <input type="text" class="form-control" id="username" name="username" required>
+            <input type="text" class="form-control" id="username" name="username" th:value="${username}" required>
         </div>
         <div class="mb-3">
             <label for="mail" class="form-label" th:text="#{register.email}">eMail</label>
-            <input type="email" class="form-control" id="mail" name="mail" required>
+            <input type="email" class="form-control" id="mail" name="mail" th:value="${mail}" required>
         </div>
         <div class="mb-3">
             <label for="password" class="form-label" th:text="#{login.password}">Password</label>
