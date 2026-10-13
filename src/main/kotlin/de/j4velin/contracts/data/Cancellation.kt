@@ -1,5 +1,8 @@
 package de.j4velin.contracts.data
 
+import de.j4velin.contracts.parseDate
+import org.springframework.http.HttpStatus
+import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDate
 import java.time.Period
 
@@ -28,13 +31,46 @@ data class Cancellation(
          * @return the corresponding [Cancellation] object
          */
         fun fromDTO(data: ContractDTO) = Cancellation(
-            minDuration = if (data.minDurationUnit != null) Period.parse("P${data.minDurationValue?.toInt() ?: 0}${data.minDurationUnit}") else null,
-            noticePeriod = if (data.noticePeriodUnit != null) Period.parse("P${data.noticePeriodValue?.toInt() ?: 0}${data.noticePeriodUnit}") else null,
-            extendPeriod = if (data.extendPeriodUnit != null) Period.parse("P${data.extendPeriodValue?.toInt() ?: 0}${data.extendPeriodUnit}") else null,
-            endDate = if (data.endDate?.isBlank() == false) LocalDate.parse(data.endDate) else null,
+            minDuration = parsePeriod(data.minDurationValue, data.minDurationUnit, "minDuration"),
+            noticePeriod = parsePeriod(data.noticePeriodValue, data.noticePeriodUnit, "noticePeriod"),
+            extendPeriod = parsePeriod(data.extendPeriodValue, data.extendPeriodUnit, "extendPeriod"),
+            endDate = parseDate(data.endDate, "endDate"),
             canceled = data.canceled != null || data.endDate?.isBlank() == false,
             ack = data.canceled != null && data.cancelAck != null
         )
+
+        /**
+         * Parses a period from the separate value and unit form fields.
+         *
+         * @param value the number of units. Null or blank means "no period"
+         * @param unit the unit: D (days), W (weeks), M (months) or Y (years). Null means "no period"
+         * @param field the name of the form field, used in the error message
+         * @return the parsed [Period] or null, if either the value or the unit is not set
+         * @throws ResponseStatusException with [HttpStatus.BAD_REQUEST], if the value is not a non-negative integer or
+         * the unit is unknown
+         */
+        private fun parsePeriod(value: String?, unit: Char?, field: String): Period? {
+            if (unit == null || value.isNullOrBlank()) {
+                return null
+            }
+            val amount = value.trim().takeIf { it.all { c -> c in '0'..'9' } }?.toIntOrNull()
+                ?: throw ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid $field value '$value': must be a non-negative integer"
+                )
+            try {
+                return when (unit) {
+                    'D' -> Period.ofDays(amount)
+                    'W' -> Period.ofWeeks(amount)
+                    'M' -> Period.ofMonths(amount)
+                    'Y' -> Period.ofYears(amount)
+                    else -> throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid $field unit '$unit'")
+                }
+            } catch (e: ArithmeticException) {
+                // Period.ofWeeks overflows for very large values
+                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid $field value '$value': too large", e)
+            }
+        }
 
         /**
          * Toggles the [Cancellation.canceled] state. Might also affect [Cancellation.endDate] and [Cancellation.ack]

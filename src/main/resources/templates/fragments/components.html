@@ -2,7 +2,7 @@
     <label th:for="${id}" class="form-label" th:text="${label}"></label>
     <div class="input-group mb-3" th:with="len=${#strings.length(str)}">
         <input type="number" class="form-control" th:id="${id}" th:name="${id} + 'Value'"
-               size="3"
+               size="3" min="0" step="1"
                th:value="${len > 0} ? ${#strings.substring(str,1,len-1)} : ''">
         <select class="form-select" th:id="${id} + 'Unit'" th:name="${id} + 'Unit'">
             <option value="" th:text="#{form.choose}">Choose...</option>
