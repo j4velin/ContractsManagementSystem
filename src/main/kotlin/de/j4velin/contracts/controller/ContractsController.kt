@@ -38,7 +38,7 @@ class ContractsController(private val repository: ContractsRepository) {
 
     @PostMapping("/contracts")
     fun addContract(contractDto: ContractDTO, @AuthenticationPrincipal user: User): String {
-        val contract = Contract(contractDto, user.requireId())
+        val contract = Contract(validate(contractDto), user.requireId())
         repository.save(contract)
         return "redirect:/contracts"
     }
@@ -84,7 +84,7 @@ class ContractsController(private val repository: ContractsRepository) {
         @AuthenticationPrincipal user: User
     ): String {
         getContract(id, user) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
-        val contract = Contract(contractDto, user.requireId()).withId(id)
+        val contract = Contract(validate(contractDto), user.requireId()).withId(id)
         repository.save(contract)
         return "redirect:/contracts"
     }
@@ -92,16 +92,33 @@ class ContractsController(private val repository: ContractsRepository) {
     /**
      * @param id the contract id to retrieve
      * @param user the current user
-     * @return the requested contract, if such a contract exists
+     * @return the requested contract, if such a contract exists and belongs to the given user. Contracts of other
+     * users are treated like non-existing ones, so that their ids can't be probed
      */
-    private fun getContract(id: String, user: User): Contract? {
-        val contract = repository.findById(id)
-        return if (!contract.isPresent) {
-            null
-        } else if (contract.get().userId != user.requireId()) {
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to access this item")
-        } else {
-            contract.get().withId(id)
-        }
-    }
+    private fun getContract(id: String, user: User): Contract? =
+        repository.findById(id)
+            .filter { it.userId == user.requireId() }
+            .map { it.withId(id) }
+            .orElse(null)
+
+    /**
+     * Validates the required fields of a submitted contract
+     *
+     * @param contractDto the submitted contract
+     * @return a copy of the DTO with trimmed type and company
+     * @throws ResponseStatusException with [HttpStatus.BAD_REQUEST], if the type or the company is blank
+     */
+    private fun validate(contractDto: ContractDTO) = contractDto.copy(
+        type = requireNotBlank(contractDto.type, "type"),
+        company = requireNotBlank(contractDto.company, "company")
+    )
+
+    /**
+     * @param value the raw form value
+     * @param field the name of the form field, used in the error message
+     * @return the trimmed value
+     * @throws ResponseStatusException with [HttpStatus.BAD_REQUEST], if the value is blank
+     */
+    private fun requireNotBlank(value: String, field: String) =
+        value.trim().ifEmpty { throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing $field") }
 }
