@@ -1,6 +1,7 @@
 package de.j4velin.contracts.data
 
 import de.j4velin.contracts.localized
+import de.j4velin.contracts.parseDate
 import org.springframework.data.annotation.Id
 import org.springframework.data.mongodb.core.mapping.Document
 import java.time.LocalDate
@@ -37,7 +38,7 @@ data class Contract internal constructor(
         type = data.type,
         company = data.company,
         notes = data.notes,
-        startDate = if (data.startDate?.isBlank() == false) LocalDate.parse(data.startDate) else null,
+        startDate = parseDate(data.startDate, "startDate"),
         cancellation = Cancellation.fromDTO(data),
         bonus = Bonus.fromDTO(data)
     )
