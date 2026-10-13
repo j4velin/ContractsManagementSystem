@@ -13,7 +13,8 @@
         <input type="text" class="form-control" size="20" id="search" th:placeholder="#{action.search}"
                oninput="filterContracts()">
     </div>
-    <table class="table table-hover" id="contracts">
+    <!--/* Bootstrap 5.3 gives table cells their own (white) background and black text: keep the table on the page background */-->
+    <table class="table table-hover" id="contracts" style="--bs-table-bg: transparent; --bs-table-color: var(--bs-body-color);">
         <thead>
         <tr id="tableHeader">
             <th th:text="#{contract.type}">Type</th>
@@ -31,7 +32,7 @@
             <th style="text-align: right;" th:text="#{contracts.header.edit}">Edit</th>
         </tr>
         </thead>
-        <tbody>
+        <tbody class="table-group-divider">
         <tr th:each="contract : ${contracts}" th:class="not ${contract.isActive} ? 'inactive'" th:style="not ${contract.isActive} ? 'display: none;'">
             <td th:text="${contract.type}"></td>
             <td th:text="${contract.company}"></td>

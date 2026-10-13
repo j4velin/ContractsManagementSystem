@@ -1,7 +1,6 @@
 <div class="container" xmlns:th="http://www.thymeleaf.org" th:fragment="footer" style="position: fixed; bottom: 0px;">
     <footer>
     </footer>
-    <!--<script th:src="@{/webjars/jquery/jquery.min.js}"></script>//-->
-    <script th:src="@{/webjars/popper.js/umd/popper.min.js}"></script>
-    <script th:src="@{/webjars/bootstrap/js/bootstrap.min.js}"></script>
+    <!-- the bundle includes Popper, which Bootstrap needs for tooltips -->
+    <script th:src="@{/webjars/bootstrap/js/bootstrap.bundle.min.js}"></script>
 </div>
