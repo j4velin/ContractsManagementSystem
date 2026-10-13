@@ -2,6 +2,8 @@ package de.j4velin.contracts.data
 
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertTimeoutPreemptively
+import java.time.Duration
 import java.time.LocalDate
 import java.time.Period
 
@@ -104,6 +106,93 @@ class CancellationTest {
 
         // 3 months min -> 03/01/2020 -> 5 years extension -> 03/01/2025 -> 2 month notice -> 02/01/2025
         assertEquals(LocalDate.of(2025, 2, 1), cancelDate)
+    }
+
+    @Test
+    fun `test getNextPossibleEndDate with null extend period and expired first term`() {
+        val noticePeriod = Period.ofMonths(2)
+        val minDuration = Period.ofMonths(1)
+        // fromDTO and old DB documents set extendPeriod to null explicitly -> used to throw a NullPointerException
+        val cancelInfo = Cancellation(noticePeriod = noticePeriod, minDuration = minDuration, extendPeriod = null)
+        val possibleEnd = cancelInfo.getNextPossibleEndDate(testStartDate, today)
+
+        // falls back to renewing by the min duration: contract started on the 1st -> must end on the 1st
+        assertEquals(LocalDate.of(2021, 11, 1), possibleEnd)
+    }
+
+    @Test
+    fun `test getNextPossibleEndDate with null extend period and without notice period`() {
+        val cancelInfo = Cancellation(minDuration = Period.ofYears(1), extendPeriod = null)
+        val possibleEnd = cancelInfo.getNextPossibleEndDate(testStartDate, today)
+
+        assertEquals(LocalDate.of(2022, 1, 1), possibleEnd)
+    }
+
+    @Test
+    fun `test getNextPossibleEndDate with zero extend period`() {
+        val noticePeriod = Period.ofMonths(1)
+        val cancelInfo =
+            Cancellation(noticePeriod = noticePeriod, minDuration = Period.ofYears(1), extendPeriod = Period.ofMonths(0))
+        val possibleEnd = assertTimeoutPreemptively(Duration.ofSeconds(5)) {
+            cancelInfo.getNextPossibleEndDate(testStartDate, today)
+        }
+
+        // no renewal and min duration is over -> can end once the notice period elapsed
+        assertEquals(today.plus(noticePeriod), possibleEnd)
+    }
+
+    @Test
+    fun `test getNextPossibleEndDate with zero extend period and without notice period`() {
+        val cancelInfo = Cancellation(minDuration = Period.ofYears(1), extendPeriod = Period.ZERO)
+        val possibleEnd = assertTimeoutPreemptively(Duration.ofSeconds(5)) {
+            cancelInfo.getNextPossibleEndDate(testStartDate, today)
+        }
+
+        assertEquals(today, possibleEnd)
+    }
+
+    @Test
+    fun `test getNextPossibleEndDate with zero extend period and first term not yet over`() {
+        val startDate = LocalDate.of(2021, 1, 1)
+        val cancelInfo = Cancellation(
+            noticePeriod = Period.ofMonths(1),
+            minDuration = Period.ofYears(1),
+            extendPeriod = Period.ZERO
+        )
+        val possibleEnd = assertTimeoutPreemptively(Duration.ofSeconds(5)) {
+            cancelInfo.getNextPossibleEndDate(startDate, today)
+        }
+
+        // the min duration still applies
+        assertEquals(LocalDate.of(2022, 1, 1), possibleEnd)
+    }
+
+    @Test
+    fun `test getNextPossibleEndDate with negative extend period`() {
+        val noticePeriod = Period.ofMonths(1)
+        val cancelInfo =
+            Cancellation(noticePeriod = noticePeriod, minDuration = Period.ofYears(1), extendPeriod = Period.ofMonths(-1))
+        val possibleEnd = assertTimeoutPreemptively(Duration.ofSeconds(5)) {
+            cancelInfo.getNextPossibleEndDate(testStartDate, today)
+        }
+
+        assertEquals(today.plus(noticePeriod), possibleEnd)
+    }
+
+    @Test
+    fun `test getNextPossibleEndDate with mixed extend period that moves backwards`() {
+        val noticePeriod = Period.ofMonths(1)
+        // positive months but negative days: +1 month -40 days is always before the current date
+        val cancelInfo = Cancellation(
+            noticePeriod = noticePeriod,
+            minDuration = Period.ofYears(1),
+            extendPeriod = Period.of(0, 1, -40)
+        )
+        val possibleEnd = assertTimeoutPreemptively(Duration.ofSeconds(5)) {
+            cancelInfo.getNextPossibleEndDate(testStartDate, today)
+        }
+
+        assertEquals(today.plus(noticePeriod), possibleEnd)
     }
 
     @Test

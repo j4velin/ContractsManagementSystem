@@ -79,6 +79,15 @@ data class Cancellation(
     fun hasCancellationInfo() = minDuration != null || noticePeriod != null || canceled || endDate != null
 
     /**
+     * Calculates the next date at which the contract can end, if it is canceled now.
+     *
+     * If [extendPeriod] is null (e.g. the user left the extension empty, or the stored document has no value), the
+     * contract is assumed to renew by [minDuration], the same as the constructor default.
+     *
+     * If the extension period can not move the term end forward (e.g. zero, negative or mixed periods like
+     * "P1M-40D"), the contract is treated as having no automatic renewal: once the minimum duration has passed, it
+     * can end as soon as the notice period allows.
+     *
      * @param startDate the contract's start date, if known
      * @param now LocalDate.now() (parameterized for testing)
      * @return the next possible end date for the contract or null, if that information is not available
@@ -95,9 +104,16 @@ data class Cancellation(
             possibleEnd = possibleEnd.plus(noticePeriod)
         }
         if (startDate != null && minDuration != null) {
+            val extension = extendPeriod ?: minDuration
             var nextTermEnd = startDate.plus(minDuration)
             while (nextTermEnd.isBefore(possibleEnd)) {
-                nextTermEnd = nextTermEnd.plus(extendPeriod)
+                val next = nextTermEnd.plus(extension)
+                if (!next.isAfter(nextTermEnd)) {
+                    // The extension can not move the term end forward, so it would loop forever. Treat the contract
+                    // as not renewing: the minimum duration is over, so it can end once the notice period elapsed.
+                    return possibleEnd
+                }
+                nextTermEnd = next
             }
             possibleEnd = nextTermEnd
         }
