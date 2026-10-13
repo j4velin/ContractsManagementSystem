@@ -1,5 +1,6 @@
 package de.j4velin.contracts.user.controller
 
+import de.j4velin.contracts.config.WebSecurityConfig
 import de.j4velin.contracts.user.data.User
 import de.j4velin.contracts.user.data.UsersRepository
 import org.hamcrest.Matchers.containsString
@@ -12,6 +13,7 @@ import org.mockito.Mockito.verify
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
 import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.context.annotation.Import
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
@@ -23,6 +25,8 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.view
 
 @WebMvcTest(UserController::class)
+// SecurityFilterChain beans aren't picked up by @WebMvcTest automatically
+@Import(WebSecurityConfig::class)
 class UserControllerTest {
 
     @Autowired

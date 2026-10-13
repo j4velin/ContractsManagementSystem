@@ -1,5 +1,6 @@
 package de.j4velin.contracts.controller
 
+import de.j4velin.contracts.config.WebSecurityConfig
 import de.j4velin.contracts.data.Bonus
 import de.j4velin.contracts.data.Cancellation
 import de.j4velin.contracts.data.Contract
@@ -18,6 +19,7 @@ import org.mockito.Mockito.verifyNoInteractions
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
 import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.context.annotation.Import
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user
@@ -31,6 +33,8 @@ import java.time.Period
 import java.util.Optional
 
 @WebMvcTest(ContractsController::class)
+// SecurityFilterChain beans aren't picked up by @WebMvcTest automatically
+@Import(WebSecurityConfig::class)
 class ContractsControllerTest {
 
     @Autowired
