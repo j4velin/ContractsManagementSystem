@@ -18,6 +18,7 @@ import java.time.LocalDate
  * @property bonus information about a bonus / reward program associated with the contract
  */
 @Document
+@ConsistentCopyVisibility
 data class Contract internal constructor(
     val userId: String,
     val type: String,
