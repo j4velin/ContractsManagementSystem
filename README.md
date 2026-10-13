@@ -13,6 +13,7 @@ docker compose up -d --build
 ```
 
 The app is then available at http://localhost:8080 (change the port with `APP_PORT` in `.env`).
+Dates such as the cancel-by date are based on today's date in the `Europe/Berlin` time zone (change it with `TIMEZONE` in `.env`).
 The database isn't reachable from outside the compose network.
 
 `scripts/smoke-test.sh` runs an end-to-end check (registration, login, contracts, logout) against a running instance:

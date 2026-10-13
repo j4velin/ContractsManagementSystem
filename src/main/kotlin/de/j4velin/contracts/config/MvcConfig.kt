@@ -15,6 +15,7 @@ class MvcConfig : WebMvcConfigurer {
     }
 
     override fun addInterceptors(registry: InterceptorRegistry) {
-        registry.addInterceptor(LocaleChangeInterceptor())
+        // a malformed ?locale= value would otherwise fail the request with a 500
+        registry.addInterceptor(LocaleChangeInterceptor().apply { isIgnoreInvalidLocale = true })
     }
 }
