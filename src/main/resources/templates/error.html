@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html xmlns:th="https://www.thymeleaf.org">
-<head th:replace="fragments/header :: head"></head>
+<head th:replace="~{fragments/header :: head}"></head>
 <body>
-<nav th:replace="fragments/header :: nav('error')"></nav>
+<nav th:replace="~{fragments/header :: nav('error')}"></nav>
 <main role="main" class="container" style="max-width: 400px;">
     <table class="table table-borderless">
         <tr>
@@ -15,6 +15,6 @@
         </tr>
     </table>
 </main>
-<div th:replace="fragments/footer :: footer"></div>
+<div th:replace="~{fragments/footer :: footer}"></div>
 </body>
 </html>

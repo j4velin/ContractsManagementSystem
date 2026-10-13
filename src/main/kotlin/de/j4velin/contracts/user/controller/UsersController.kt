@@ -3,13 +3,13 @@ package de.j4velin.contracts.user.controller
 import de.j4velin.contracts.user.data.User
 import de.j4velin.contracts.user.data.UserDTO
 import de.j4velin.contracts.user.data.UsersRepository
+import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
-import javax.servlet.http.HttpServletRequest
 
 @Controller
 class UserController(private val repository: UsersRepository) {

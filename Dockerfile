@@ -1,5 +1,5 @@
 # Build stage: compiles the app with the Gradle wrapper
-FROM eclipse-temurin:11-jdk AS build
+FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 
 # Download Gradle and the dependencies in their own layer, so source changes don't re-download them
@@ -14,7 +14,7 @@ RUN ./gradlew --no-daemon bootJar -x test \
     && find build/libs -name '*.jar' ! -name '*-plain.jar' -exec cp {} app.jar \;
 
 # Runtime stage: only the JRE and the app
-FROM eclipse-temurin:11-jre
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 RUN groupadd --system app && useradd --system --gid app app
 COPY --from=build /workspace/app.jar app.jar

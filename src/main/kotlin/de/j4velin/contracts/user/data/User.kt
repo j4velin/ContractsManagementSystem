@@ -39,7 +39,10 @@ data class User(
      * @param data the DTO data
      */
     constructor(data: UserDTO) : this(
-        username = data.username, password = BCryptPasswordEncoder().encode(data.password), mail = data.mail
+        username = data.username,
+        // encode() is declared nullable, but only returns null for a null password
+        password = checkNotNull(BCryptPasswordEncoder().encode(data.password)),
+        mail = data.mail
     )
 }
 

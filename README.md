@@ -23,7 +23,7 @@ scripts/smoke-test.sh http://localhost:8080
 
 ## Run without Docker
 
-Copy `src/main/resources/application.properties.sample` to `application.properties`, set the MongoDB URI, then:
+Requires Java 21. Copy `src/main/resources/application.properties.sample` to `application.properties`, set the MongoDB URI, then:
 
 ```bash
 ./gradlew bootRun

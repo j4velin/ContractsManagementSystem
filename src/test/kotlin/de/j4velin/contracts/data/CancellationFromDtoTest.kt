@@ -37,7 +37,7 @@ class CancellationFromDtoTest {
 
     private fun assertBadRequest(block: () -> Unit) {
         val e = assertThrows<ResponseStatusException> { block() }
-        assertEquals(HttpStatus.BAD_REQUEST, e.status)
+        assertEquals(HttpStatus.BAD_REQUEST, e.statusCode)
     }
 
     @Test

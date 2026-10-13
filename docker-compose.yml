@@ -13,7 +13,7 @@ services:
     ports:
       - "${APP_PORT:-8080}:8080"
     environment:
-      SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/contracts
+      SPRING_MONGODB_URI: mongodb://mongo:27017/contracts
       # creates the unique index on the username
       SPRING_DATA_MONGODB_AUTO_INDEX_CREATION: "true"
       # contracts.remember-me.key; if empty, remembered logins don't survive a restart of the app
