@@ -43,13 +43,13 @@ class ContractsController(private val repository: ContractsRepository) {
         return "redirect:/contracts"
     }
 
-    @GetMapping("/contracts/{id}/delete")
+    @PostMapping("/contracts/{id}/delete")
     fun deleteContract(@PathVariable id: String, @AuthenticationPrincipal user: User): String {
         getContract(id, user)?.also { repository.deleteById(id) } ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
         return "redirect:/contracts"
     }
 
-    @GetMapping("/contracts/{id}/toggleCancel")
+    @PostMapping("/contracts/{id}/toggleCancel")
     fun toggleCanceled(@PathVariable id: String, @AuthenticationPrincipal user: User): String {
         val update = getContract(id, user)?.let {
             Cancellation.toggleCancel(it).withId(id)
@@ -58,7 +58,7 @@ class ContractsController(private val repository: ContractsRepository) {
         return "redirect:/contracts"
     }
 
-    @GetMapping("/contracts/{id}/toggleCancelAck")
+    @PostMapping("/contracts/{id}/toggleCancelAck")
     fun toggleCancelAck(@PathVariable id: String, @AuthenticationPrincipal user: User): String {
         val update = getContract(id, user)?.let {
             Cancellation.toggleCancelAck(it).withId(id)
@@ -67,7 +67,7 @@ class ContractsController(private val repository: ContractsRepository) {
         return "redirect:/contracts"
     }
 
-    @GetMapping("/contracts/{id}/toggleBonus")
+    @PostMapping("/contracts/{id}/toggleBonus")
     fun toggleBonus(@PathVariable id: String, @AuthenticationPrincipal user: User): String {
         val update = getContract(id, user)?.let {
             val newBonus = it.bonus.copy(received = !it.bonus.received)
