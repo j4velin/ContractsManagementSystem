@@ -557,7 +557,7 @@ class ContractsControllerTest {
         mockMvc.perform(get("/import-export").with(user(testUser)))
             .andExpect(status().isOk)
             .andExpect(content().string(matchesPattern(
-                "(?s).*<a class=\"nav-link active\" href=\"/import-export\">Import / Export</a>.*"
+                "(?s).*<a class=\"nav-link active\" href=\"/import-export\">Backup</a>.*"
             )))
             .andExpect(content().string(containsString("href=\"/contracts/export\"")))
             .andExpect(content().string(matchesPattern(
