@@ -235,6 +235,14 @@ data class Cancellation(
         if (endDate != null || noticePeriod == null) {
             return null
         }
-        return getNextPossibleEndDate(startDate, now)?.minus(noticePeriod)
+        val end = getNextPossibleEndDate(startDate, now) ?: return null
+        // Subtracting months isn't the inverse of adding them: Apr 30 minus 1 month is Mar 30, but notice given on
+        // Mar 31 also ends on Apr 30 (Mar 31 + 1 month is clamped to Apr 30). So find the latest day from which the
+        // notice period still ends in time. Month lengths differ by at most 3 days, so this takes at most 3 steps.
+        var latest = end.minus(noticePeriod)
+        while (!latest.plusDays(1).plus(noticePeriod).isAfter(end)) {
+            latest = latest.plusDays(1)
+        }
+        return latest
     }
 }
