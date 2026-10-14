@@ -1,10 +1,13 @@
-# Runs the app together with a MongoDB database:
+# Runs the app together with a MongoDB database. Either with the image that CI publishes for every change on main:
+#   docker compose pull && docker compose up -d
+# or built from this checkout:
 #   docker compose up -d --build
 # The app is then available on http://localhost:8080 (or APP_PORT). Settings can be put into a .env file next to
 # this file, see .env.example.
 
 services:
   app:
+    image: ghcr.io/j4velin/contractsmanagementsystem:${APP_VERSION:-latest}
     build: .
     restart: unless-stopped
     depends_on:
@@ -22,10 +25,14 @@ services:
       SERVER_FORWARD_HEADERS_STRATEGY: ${FORWARD_HEADERS_STRATEGY:-native}
       # time zone of the app: decides which contracts are active today and the cancel-by dates
       TZ: ${TIMEZONE:-Europe/Berlin}
+      # maximum Java heap: plenty for a few users, and small enough for a server with 2 GB of RAM
+      JAVA_TOOL_OPTIONS: -Xmx${APP_MAX_HEAP:-256m}
 
   mongo:
     image: mongo:8.0
     restart: unless-stopped
+    # MongoDB reserves about half of the RAM for its cache by default, far more than this app needs
+    command: ["--wiredTigerCacheSizeGB", "${MONGO_CACHE_GB:-0.25}"]
     # not published to the host: only the app can reach the database
     volumes:
       - mongo-data:/data/db
