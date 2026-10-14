@@ -82,6 +82,27 @@ class ContractsCsvTest {
     }
 
     @Test
+    fun `error rows are counted like in a spreadsheet program, including blank rows`() {
+        val csv = "type,company\r\n,,\r\nRent,ACME\r\n\r\nRent,\r\n"
+        assertEquals(listOf(5 to "company"), read(csv).errors.map { it.row to it.column })
+    }
+
+    @Test
+    fun `missing columns are reported in the row of the header, after leading blank rows`() {
+        assertEquals(listOf(3 to "company"), read(";;\r\n\r\ntype;notes\r\nRent;\r\n").errors.map { it.row to it.column })
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["type;company;\"unknown,column\"\r\n", ";;\r\n\r\ntype;company;x\r\n","\"x\r\ny,z\";type;company\r\n"])
+    fun `separator is detected from the header, ignoring quoted cells and blank rows before it`(header: String) {
+        val columns = ContractsCsv.parse(header).last { row -> row.any { it.isNotBlank() } }
+        val row = columns.joinToString(";") { if (it == "type") "Rent" else if (it == "company") "ACME" else "" }
+        val result = read(header + row + "\r\n")
+        assertEquals(emptyList<ContractsCsv.ImportError>(), result.errors)
+        assertEquals(listOf(Contract(userId, "Rent", "ACME")), result.contracts)
+    }
+
+    @Test
     fun `reports missing required columns`() {
         val result = read("type,notes\r\nRent,\r\n")
         assertEquals(listOf("company"), result.errors.map { it.column })

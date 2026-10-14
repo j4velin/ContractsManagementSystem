@@ -96,20 +96,21 @@ object ContractsCsv {
      * @return the contracts, or the errors, if any row is invalid. The contracts have no id, so saving them adds them
      */
     fun read(bytes: ByteArray, userId: String): ImportResult {
+        // numbered before skipping blank rows (spreadsheet programs often add some at the end), so that errors name
+        // the row as the spreadsheet program shows it
         val rows = parse(decode(bytes).removePrefix(BOM.toString()))
-            // spreadsheet programs often add empty rows at the end
-            .filterNot { row -> row.all { it.isBlank() } }
-        val header = rows.firstOrNull() ?: return failure(ImportError(1, null, message(ERROR_EMPTY)))
+            .mapIndexed { index, row -> IndexedValue(index + 1, row) }
+            .filterNot { (_, row) -> row.all { it.isBlank() } }
+        val (headerRow, header) = rows.firstOrNull() ?: return failure(ImportError(1, null, message(ERROR_EMPTY)))
         val columnIndex = header.withIndex().associate { it.value.trim() to it.index }
         val missing = REQUIRED_COLUMNS.filterNot { it in columnIndex }
         if (missing.isNotEmpty()) {
-            return failure(missing.map { ImportError(1, it, message(ERROR_COLUMN_MISSING, it)) })
+            return failure(missing.map { ImportError(headerRow, it, message(ERROR_COLUMN_MISSING, it)) })
         }
 
         val contracts = mutableListOf<Contract>()
         val errors = mutableListOf<ImportError>()
-        rows.drop(1).forEachIndexed { index, row ->
-            val rowNumber = index + 2
+        rows.drop(1).forEach { (rowNumber, row) ->
             val cell = { column: String -> columnIndex[column]?.let { row.getOrNull(it) }?.takeIf { it.isNotEmpty() } }
             val rowErrors = mutableListOf<ImportError>()
             val form = ContractForm().apply {
@@ -225,11 +226,10 @@ object ContractsCsv {
 
     /**
      * Splits a CSV file into rows and cells (RFC 4180): quoted cells may contain separators, line breaks and doubled
-     * quotes. The separator is a semicolon, if the first line contains one but no comma, and a comma otherwise
+     * quotes. The separator is detected from the header, see [detectSeparator]
      */
     internal fun parse(text: String): List<List<String>> {
-        val firstLine = text.substringBefore('\n')
-        val separator = if (';' in firstLine && ',' !in firstLine) ';' else ','
+        val separator = detectSeparator(text)
         val rows = mutableListOf<List<String>>()
         var row = mutableListOf<String>()
         val cell = StringBuilder()
@@ -269,5 +269,34 @@ object ContractsCsv {
             rows += row
         }
         return rows
+    }
+
+    /**
+     * Detects the separator from the header, the first row which isn't blank. Only counts separators outside quoted
+     * cells, as a quoted column name may contain the other separator
+     *
+     * @return a semicolon, if the header contains one but no comma, and a comma otherwise
+     */
+    private fun detectSeparator(text: String): Char {
+        var quoted = false
+        var commas = 0
+        var semicolons = 0
+        // whether the current row has a cell value, otherwise it is blank (like ",,," at the start of the file)
+        var content = false
+        for (c in text) {
+            when {
+                c == '"' -> quoted = !quoted
+                quoted -> if (!c.isWhitespace()) content = true
+                c == ',' -> commas++
+                c == ';' -> semicolons++
+                c == '\n' || c == '\r' -> if (content) break else {
+                    commas = 0
+                    semicolons = 0
+                }
+
+                !c.isWhitespace() -> content = true
+            }
+        }
+        return if (semicolons > 0 && commas == 0) ';' else ','
     }
 }

@@ -130,6 +130,9 @@ class ContractsController(
             })
             return "redirect:/import-export"
         }
+        // the bundled MongoDB is a standalone server without transactions, so replacing isn't atomic. Deleting first
+        // is intended: if saving fails, the user still has the file and can simply import it again with "replace",
+        // whereas saving first could leave duplicates, which the user would have to clean up by hand
         if (replace) {
             repository.deleteAll(repository.findByUserId(user.requireId()))
         }
