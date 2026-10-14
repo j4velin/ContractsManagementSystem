@@ -1,7 +1,9 @@
 package de.j4velin.contracts.data
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertTimeoutPreemptively
 import java.time.Duration
@@ -55,16 +57,47 @@ class ContractTest {
     }
 
     @Test
-    fun `test sortedByDate sorts like compareTo`() {
-        // dates far in the past or in the future, so that compareTo's LocalDate.now() doesn't change the order
+    fun `test sortedByDate sorts like sortDateComparator`() {
         val contracts = listOf(
             contract("none"),
             contract("2100", cancellation = Cancellation(endDate = LocalDate.of(2100, 1, 1))),
             contract("2000", cancellation = Cancellation(endDate = LocalDate.of(2000, 1, 1))),
             contract("3000", LocalDate.of(2999, 1, 1), Cancellation(minDuration = Period.ofYears(1)))
         )
-        assertEquals(contracts.sorted(), Contract.sortedByDate(contracts))
-        assertEquals(listOf("2000", "2100", "3000", "none"), contracts.sorted().map { it.company })
+        val sorted = contracts.sortedWith(Contract.sortDateComparator(today))
+        assertEquals(sorted, Contract.sortedByDate(contracts, today))
+        assertEquals(listOf("2000", "2100", "3000", "none"), sorted.map { it.company })
+    }
+
+    @Test
+    fun `test toggles keep the id`() {
+        val stored = Contract(
+            "user", "type", "company", cancellation = Cancellation(noticePeriod = Period.ofDays(1)), id = "c1"
+        )
+        assertEquals("c1", stored.toggleCancel(today).id)
+        assertEquals("c1", stored.toggleCancelAck(today).id)
+        assertEquals("c1", stored.toggleBonus().id)
+    }
+
+    @Test
+    fun `test toggleBonus toggles only the received state`() {
+        val contract = Contract("user", "type", "company", bonus = Bonus(description = "bonus"))
+        val received = contract.toggleBonus()
+        assertEquals(Bonus(description = "bonus", received = true), received.bonus)
+        assertEquals(contract, received.toggleBonus())
+    }
+
+    @Test
+    fun `test toggleCancel sets the next possible end date of today`() {
+        val contract = contract("a", cancellation = Cancellation(noticePeriod = Period.ofMonths(1)))
+        assertEquals(LocalDate.of(2026, 11, 13), contract.toggleCancel(today).cancellation.endDate)
+    }
+
+    @Test
+    fun `test isActive compares the end date with today`() {
+        val canceled = contract("a", cancellation = Cancellation(endDate = today))
+        assertTrue(canceled.isActive(today.minusDays(1)))
+        assertFalse(canceled.isActive(today))
     }
 
     @Test

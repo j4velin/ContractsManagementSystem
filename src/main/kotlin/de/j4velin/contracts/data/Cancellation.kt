@@ -81,45 +81,6 @@ data class Cancellation(
          * Average length of a month in the Gregorian calendar (146097 days per 400 years = 4800 months)
          */
         private const val AVERAGE_DAYS_PER_MONTH = 146097.0 / 4800
-
-        /**
-         * Toggles the [Cancellation.canceled] state. Might also affect [Cancellation.endDate] and [Cancellation.ack]
-         * properties
-         *
-         * @param contract the contract on which to toggle the cancel state
-         * @param newAck the new cancel acknowledged value. Only considered, if this operation sets the state to 'canceled'
-         * @return the modified [Contract]
-         */
-        fun toggleCancel(contract: Contract, newAck: Boolean = false): Contract {
-            val cancellation = contract.cancellation
-            val newCancellation = if (cancellation.canceled) {
-                // now un-canceling -> also clear the end date: a set end date implies 'canceled' (see fromDTO), and the
-                // next possible end date has to be calculated again instead of staying frozen at the old value
-                cancellation.copy(canceled = false, endDate = null, ack = false)
-            } else {
-                // now canceling -> set end date the same as the next possible end date, if not set yet
-                val endDate = cancellation.endDate
-                    ?: cancellation.getNextPossibleEndDate(contract.startDate, LocalDate.now())
-                cancellation.copy(canceled = true, endDate = endDate, ack = newAck)
-            }
-            return contract.copy(cancellation = newCancellation)
-        }
-
-        /**
-         * Toggles the [Cancellation.ack] state. Might also affect [Cancellation.endDate] and [Cancellation.canceled]
-         * properties
-         *
-         * @param contract the contract on which to toggle the cancel ack state
-         * @return the modified [Contract]
-         */
-        fun toggleCancelAck(contract: Contract): Contract {
-            return if (!contract.cancellation.canceled && !contract.cancellation.ack) {
-                // not canceled and not acknowledged? -> toggle both
-                toggleCancel(contract, true)
-            } else {
-                contract.copy(cancellation = contract.cancellation.copy(ack = !contract.cancellation.ack))
-            }
-        }
     }
 
     /**
@@ -127,6 +88,39 @@ data class Cancellation(
      */
     fun hasCancellationInfo() =
         minDuration != null || noticePeriod != null || extendPeriod != null || canceled || endDate != null
+
+    /**
+     * Toggles the [canceled] state. Might also affect the [endDate] and [ack] properties
+     *
+     * @param startDate the contract's start date, if known
+     * @param today the current date
+     * @param newAck the new cancel acknowledged value. Only considered, if this operation sets the state to 'canceled'
+     * @return the modified copy of this cancellation
+     */
+    internal fun toggleCancel(startDate: LocalDate?, today: LocalDate, newAck: Boolean = false): Cancellation =
+        if (canceled) {
+            // now un-canceling -> also clear the end date: a set end date implies 'canceled' (see fromDTO), and the
+            // next possible end date has to be calculated again instead of staying frozen at the old value
+            copy(canceled = false, endDate = null, ack = false)
+        } else {
+            // now canceling -> set end date the same as the next possible end date, if not set yet
+            copy(canceled = true, endDate = endDate ?: getNextPossibleEndDate(startDate, today), ack = newAck)
+        }
+
+    /**
+     * Toggles the [ack] state. Might also affect the [endDate] and [canceled] properties
+     *
+     * @param startDate the contract's start date, if known
+     * @param today the current date
+     * @return the modified copy of this cancellation
+     */
+    internal fun toggleCancelAck(startDate: LocalDate?, today: LocalDate): Cancellation =
+        if (!canceled && !ack) {
+            // not canceled and not acknowledged? -> toggle both
+            toggleCancel(startDate, today, newAck = true)
+        } else {
+            copy(ack = !ack)
+        }
 
     /**
      * Calculates the next date at which the contract can end, if it is canceled now.
@@ -143,10 +137,10 @@ data class Cancellation(
      * a monthly extension, the terms end on Feb 29, Mar 31, Apr 30, ... instead of Feb 29, Mar 29, Apr 29, ...
      *
      * @param startDate the contract's start date, if known
-     * @param now LocalDate.now() (parameterized for testing)
+     * @param now the current date
      * @return the next possible end date for the contract or null, if that information is not available
      */
-    internal fun getNextPossibleEndDate(startDate: LocalDate?, now: LocalDate = LocalDate.now()): LocalDate? {
+    internal fun getNextPossibleEndDate(startDate: LocalDate?, now: LocalDate): LocalDate? {
         if (endDate != null) {
             return endDate
         }
@@ -174,7 +168,7 @@ data class Cancellation(
      * Every later date can be reached as well, as "date minus notice period" never decreases for a later date.
      *
      * @param notice the notice period
-     * @param now LocalDate.now()
+     * @param now the current date
      * @return the earliest reachable end date
      */
     private fun getEarliestEndWithNotice(notice: Period, now: LocalDate): LocalDate {
@@ -250,11 +244,11 @@ data class Cancellation(
 
     /**
      * @param startDate the contract's start date, if known
-     * @param now LocalDate.now() (parameterized for testing)
+     * @param now the current date
      * @return the latest possible date to cancel the contract as soon as possible, or null, if no notice period is set
      * or if the contract is already canceled
      */
-    internal fun getLatestPossibleCancelDate(startDate: LocalDate?, now: LocalDate = LocalDate.now()): LocalDate? {
+    internal fun getLatestPossibleCancelDate(startDate: LocalDate?, now: LocalDate): LocalDate? {
         if (endDate != null || noticePeriod == null) {
             return null
         }

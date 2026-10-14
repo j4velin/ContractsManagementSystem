@@ -33,7 +33,7 @@
         </tr>
         </thead>
         <tbody class="table-group-divider">
-        <tr th:each="contract : ${contracts}" th:class="not ${contract.isActive} ? 'inactive'" th:style="not ${contract.isActive} ? 'display: none;'">
+        <tr th:each="contract : ${contracts}" th:class="not ${contract.isActive(today)} ? 'inactive'" th:style="not ${contract.isActive(today)} ? 'display: none;'">
             <td th:text="${contract.type}"></td>
             <td th:text="${contract.company}"></td>
             <td th:text="${contract.notes}"></td>
@@ -63,7 +63,7 @@
                 </form>
             </td>
             <td th:class="not ${contract.cancellation.canceled} ? 'text-muted fw-light fst-italic'"
-                th:text="${contract.getLocalizedEndDate()}">
+                th:text="${contract.getLocalizedEndDate(today)}">
             </td>
             <td style="text-align: right;">
                 <a th:href="@{/contracts/{id}(id=${contract.id})}" class="text-decoration-none">

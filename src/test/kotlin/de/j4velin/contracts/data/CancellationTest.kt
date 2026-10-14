@@ -202,7 +202,7 @@ class CancellationTest {
         assertFalse(cancelInfo.ack)
         assertNull(cancelInfo.endDate)
         val contract = Contract("id", "type", "company", cancellation = cancelInfo)
-        val newContract = Cancellation.toggleCancel(contract)
+        val newContract = contract.toggleCancel(today)
         assertTrue(newContract.cancellation.canceled)
         assertNotNull(newContract.cancellation.endDate)
         assertFalse(newContract.cancellation.ack) // ack should not be affected by toggling cancel state
@@ -212,11 +212,11 @@ class CancellationTest {
     fun `test toggle cancel twice clears the end date`() {
         val cancelInfo = Cancellation(noticePeriod = Period.ofDays(1))
         val contract = Contract("id", "type", "company", cancellation = cancelInfo)
-        val canceled = Cancellation.toggleCancel(contract)
+        val canceled = contract.toggleCancel(today)
         assertNotNull(canceled.cancellation.endDate)
         assertNull(canceled.cancellation.getLatestPossibleCancelDate(null, today))
 
-        val unCanceled = Cancellation.toggleCancel(canceled)
+        val unCanceled = canceled.toggleCancel(today)
         assertFalse(unCanceled.cancellation.canceled)
         assertFalse(unCanceled.cancellation.ack)
         assertNull(unCanceled.cancellation.endDate)
@@ -232,11 +232,11 @@ class CancellationTest {
         val startDate = LocalDate.of(2020, 3, 15)
         val cancelInfo = Cancellation(noticePeriod = Period.ofMonths(1), minDuration = Period.ofYears(1))
         val contract = Contract("id", "type", "company", startDate = startDate, cancellation = cancelInfo)
-        val canceled = Cancellation.toggleCancelAck(contract)
+        val canceled = contract.toggleCancelAck(today)
         assertTrue(canceled.cancellation.canceled)
         assertTrue(canceled.cancellation.ack)
 
-        val unCanceled = Cancellation.toggleCancel(canceled)
+        val unCanceled = canceled.toggleCancel(today)
         assertFalse(unCanceled.cancellation.canceled)
         assertFalse(unCanceled.cancellation.ack)
         assertNull(unCanceled.cancellation.endDate)
@@ -249,7 +249,7 @@ class CancellationTest {
         // not possible through the form (a set end date implies 'canceled'), but might exist in the database
         val cancelInfo = Cancellation(noticePeriod = Period.ofDays(1), endDate = endDate, canceled = false)
         val contract = Contract("id", "type", "company", cancellation = cancelInfo)
-        val canceled = Cancellation.toggleCancel(contract)
+        val canceled = contract.toggleCancel(today)
         assertTrue(canceled.cancellation.canceled)
         assertEquals(endDate, canceled.cancellation.endDate)
     }
@@ -398,7 +398,7 @@ class CancellationTest {
         assertFalse(cancelInfo.ack)
         assertNull(cancelInfo.endDate)
         val contract = Contract("id", "type", "company", cancellation = cancelInfo)
-        val newContract = Cancellation.toggleCancelAck(contract)
+        val newContract = contract.toggleCancelAck(today)
         assertTrue(newContract.cancellation.canceled) // should also 'cancel' the contract
         assertNotNull(newContract.cancellation.endDate)
         assertTrue(newContract.cancellation.ack)
