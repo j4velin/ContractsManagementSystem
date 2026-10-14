@@ -23,4 +23,9 @@ data class Bonus(val description: String? = null, val received: Boolean = false)
      * @return true, if some bonus information is set
      */
     fun hasBonus() = description != null || received
+
+    /**
+     * @return a copy of this bonus with the [received] state toggled
+     */
+    internal fun toggleReceived() = copy(received = !received)
 }

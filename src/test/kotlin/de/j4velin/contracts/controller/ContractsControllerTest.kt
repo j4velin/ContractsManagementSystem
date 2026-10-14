@@ -11,6 +11,7 @@ import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.matchesPattern
 import org.hamcrest.Matchers.not
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
@@ -28,6 +29,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user
+import org.springframework.test.context.bean.override.convention.TestBean
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -35,7 +37,10 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.time.Clock
+import java.time.LocalDate
 import java.time.Period
+import java.time.ZoneOffset
 import java.util.Optional
 
 @WebMvcTest(ContractsController::class)
@@ -57,13 +62,24 @@ class ContractsControllerTest {
     @MockitoBean
     private lateinit var usersRepository: UsersRepository
 
+    // replaces the system clock with the fixed one of the clock() factory method below
+    @TestBean
+    private lateinit var clock: Clock
+
+    companion object {
+        private val today = LocalDate.of(2026, 10, 13)
+
+        @JvmStatic
+        fun clock(): Clock = Clock.fixed(today.atStartOfDay(ZoneOffset.UTC).toInstant(), ZoneOffset.UTC)
+    }
+
     private val testUserId = "user1"
     private val testUser = User(id = testUserId, username = "alice", password = "secret", mail = "alice@example.com")
 
     private fun testContract() =
-        Contract(testUserId, "type", "company", bonus = Bonus(description = "bonus")).withId("c1")
+        Contract(testUserId, "type", "company", bonus = Bonus(description = "bonus"), id = "c1")
 
-    private fun otherUsersContract() = Contract("user2", "type", "company").withId("c1")
+    private fun otherUsersContract() = Contract("user2", "type", "company", id = "c1")
 
     @ParameterizedTest
     @ValueSource(strings = ["delete", "toggleCancel", "toggleCancelAck", "toggleBonus"])
@@ -165,6 +181,52 @@ class ContractsControllerTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = ["", "/toggleCancel", "/toggleCancelAck", "/toggleBonus"])
+    fun `changing a contract saves it under its id, so that it is updated instead of inserted again`(action: String) {
+        given(repository.findById("c1")).willReturn(Optional.of(testContract()))
+        mockMvc.perform(
+            post("/contracts/c1$action").with(user(testUser)).with(csrf())
+                .param("type", "type").param("company", "company")
+        ).andExpect(status().is3xxRedirection)
+            .andExpect(redirectedUrl("/contracts"))
+        val captor = ArgumentCaptor.forClass(Contract::class.java)
+        verify(repository).save(captor.capture())
+        assertEquals("c1", captor.value.id)
+        assertEquals(testUserId, captor.value.userId)
+    }
+
+    @Test
+    fun `toggling cancel uses the injected clock for the end date`() {
+        val contract = Contract(
+            testUserId, "type", "company", cancellation = Cancellation(noticePeriod = Period.ofMonths(1)), id = "c1"
+        )
+        given(repository.findById("c1")).willReturn(Optional.of(contract))
+        mockMvc.perform(post("/contracts/c1/toggleCancel").with(user(testUser)).with(csrf()))
+            .andExpect(status().is3xxRedirection)
+        val captor = ArgumentCaptor.forClass(Contract::class.java)
+        verify(repository).save(captor.capture())
+        assertTrue(captor.value.cancellation.canceled)
+        assertEquals(LocalDate.of(2026, 11, 13), captor.value.cancellation.endDate)
+    }
+
+    @Test
+    fun `contracts page uses the injected clock`() {
+        val ended = Contract(
+            testUserId, "type", "ended", cancellation = Cancellation(endDate = today), id = "c1"
+        )
+        val running = Contract(
+            testUserId, "type", "running", cancellation = Cancellation(noticePeriod = Period.ofDays(3)), id = "c2"
+        )
+        given(repository.findByUserId(testUserId)).willReturn(listOf(ended, running))
+        mockMvc.perform(get("/contracts").with(user(testUser)))
+            .andExpect(status().isOk)
+            // ends today -> no longer active
+            .andExpect(content().string(matchesPattern("(?s).*<tr class=\"inactive\" style=\"display: none;\">\\s*<td>type</td>\\s*<td>ended</td>.*")))
+            // the running contract can be canceled today, which is shown as its date
+            .andExpect(content().string(matchesPattern("(?s).*<tr>\\s*<td>type</td>\\s*<td>running</td>.*Oct 13, 2026.*")))
+    }
+
+    @ParameterizedTest
     @CsvSource("'', company", "'   ', company", "type, ''", "type, '  '")
     fun `updating a contract with blank type or company is rejected`(type: String, company: String) {
         given(repository.findById("c1")).willReturn(Optional.of(testContract()))
@@ -209,7 +271,7 @@ class ContractsControllerTest {
             minDuration = Period.ofYears(2), noticePeriod = Period.ofWeeks(3), extendPeriod = Period.ofMonths(1)
         )
         given(repository.findById("c1"))
-            .willReturn(Optional.of(Contract(testUserId, "type", "company", cancellation = cancellation).withId("c1")))
+            .willReturn(Optional.of(Contract(testUserId, "type", "company", cancellation = cancellation, id = "c1")))
         mockMvc.perform(get("/contracts/c1").with(user(testUser)))
             .andExpect(status().isOk)
             .andExpect(content().string(periodField("minDuration", "2", "Y")))
@@ -221,7 +283,7 @@ class ContractsControllerTest {
     fun `contract page shows days which are not whole weeks as days`() {
         val cancellation = Cancellation(noticePeriod = Period.ofDays(10))
         given(repository.findById("c1"))
-            .willReturn(Optional.of(Contract(testUserId, "type", "company", cancellation = cancellation).withId("c1")))
+            .willReturn(Optional.of(Contract(testUserId, "type", "company", cancellation = cancellation, id = "c1")))
         mockMvc.perform(get("/contracts/c1").with(user(testUser)))
             .andExpect(content().string(periodField("noticePeriod", "10", "D")))
     }
