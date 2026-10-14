@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.plugin.getKotlinPluginVersion
 
 plugins {
     val kotlinVersion = "2.4.20"
@@ -17,7 +18,7 @@ java {
 }
 
 // Spring Boot's dependency management would otherwise pin the Kotlin libraries to its own (older) Kotlin version
-extra["kotlin.version"] = "2.4.20"
+extra["kotlin.version"] = getKotlinPluginVersion()
 
 repositories {
     mavenCentral()
