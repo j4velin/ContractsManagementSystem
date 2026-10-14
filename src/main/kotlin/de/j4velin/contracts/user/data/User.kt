@@ -55,8 +55,12 @@ enum class UserRole {
     USER
 }
 
+/**
+ * The registration form data. Every field defaults to an empty string, so that a request lacking a field still binds
+ * (instead of failing with a 400) and is treated like one with a blank field.
+ */
 data class UserDTO(
-    val username: String,
-    val password: String,
-    val mail: String
+    val username: String = "",
+    val password: String = "",
+    val mail: String = ""
 )

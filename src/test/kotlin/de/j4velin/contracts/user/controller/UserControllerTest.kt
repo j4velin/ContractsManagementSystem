@@ -180,6 +180,42 @@ class UserControllerTest {
     }
 
     @Test
+    fun `logged in users are redirected from a registration without any form fields`() {
+        mockMvc.perform(post("/register").with(csrf()).asLoggedInUser())
+            .andExpect(redirectedUrl("/contracts"))
+        verify(repository, never()).save(any())
+    }
+
+    @Test
+    fun `missing mail is rejected like a blank one without saving`() {
+        mockMvc.perform(
+            post("/register").with(csrf())
+                .param("username", "alice")
+                .param("password", "s3cret")
+        )
+            .andExpect(status().isOk)
+            .andExpect(view().name("register"))
+            .andExpect(model().attribute("error", "register.error.missingFields"))
+            .andExpect(model().attribute("username", "alice"))
+        verify(repository, never()).save(any())
+    }
+
+    @Test
+    fun `missing password is rejected like a blank one without saving`() {
+        mockMvc.perform(
+            post("/register").with(csrf())
+                .param("username", "alice")
+                .param("mail", "alice@example.com")
+        )
+            .andExpect(status().isOk)
+            .andExpect(view().name("register"))
+            .andExpect(model().attribute("error", "register.error.missingFields"))
+            .andExpect(model().attribute("username", "alice"))
+            .andExpect(model().attribute("mail", "alice@example.com"))
+        verify(repository, never()).save(any())
+    }
+
+    @Test
     fun `blank fields are rejected without saving`() {
         register(username = "  ", password = "")
             .andExpect(status().isOk)
