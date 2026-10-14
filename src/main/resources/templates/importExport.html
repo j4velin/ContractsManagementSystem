@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{fragments/header :: head}"></head>
+<body>
+<nav th:replace="~{fragments/header :: nav('importExport')}"></nav>
+<main role="main" class="container">
+    <div class="alert alert-danger" role="alert" th:if="${param.tooLarge != null}"
+         th:text="#{contracts.import.error.tooLarge(${maxUploadMegabytes})}">The file is too large</div>
+    <div class="alert alert-danger" role="alert" th:if="${importErrors != null}">
+        <p class="fw-bold" th:text="#{contracts.import.failed}">Nothing was imported</p>
+        <ul class="mb-0">
+            <li th:each="error : ${importErrors}" th:text="${error}"></li>
+        </ul>
+    </div>
+    <div class="card mt-4">
+        <div class="card-body">
+            <h1 class="h4 card-title" th:text="#{contracts.importExport}">Import &amp; Export</h1>
+            <p class="small text-muted" th:text="#{contracts.importExport.hint}">Export</p>
+            <a th:href="@{/contracts/export}" class="btn btn-outline-secondary mb-3">
+                <i class="bi bi-download me-1"></i><span th:text="#{contracts.export}">Export as CSV</span>
+            </a>
+            <form method="post" enctype="multipart/form-data" th:action="@{/contracts/import}" class="row g-2 align-items-center">
+                <div class="col-auto">
+                    <input type="file" class="form-control" name="file" accept=".csv,text/csv" required
+                           th:attr="aria-label=#{contracts.import.file}">
+                </div>
+                <div class="col-auto form-check ms-2">
+                    <input class="form-check-input" type="checkbox" name="replace" value="true" id="replace">
+                    <label class="form-check-label" for="replace" th:text="#{contracts.import.replace}">Replace</label>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-outline-secondary">
+                        <i class="bi bi-upload me-1"></i><span th:text="#{contracts.import}">Import CSV</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</main>
+<div th:replace="~{fragments/footer :: footer}"></div>
+</body>
+</html>

@@ -20,22 +20,29 @@ import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.BDDMockito.given
+import org.mockito.Mockito.inOrder
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.core.env.Environment
+import org.springframework.mock.web.MockMultipartFile
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user
 import org.springframework.test.context.bean.override.convention.TestBean
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.model
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.view
+import org.springframework.util.unit.DataSize
 import java.time.Clock
 import java.time.LocalDate
 import java.time.Period
@@ -494,6 +501,131 @@ class ContractsControllerTest {
             .andExpect(content().string(matchesPattern("(?s).*<input[^>]*id=\"noticePeriod\"[^>]*value=\"\".*")))
             .andExpect(content().string(not(containsString("selected=\"selected\""))))
     }
+
+    @Test
+    fun `export downloads the user's contracts as CSV`() {
+        given(repository.findByUserId(testUserId)).willReturn(listOf(testContract()))
+        mockMvc.perform(get("/contracts/export").with(user(testUser)))
+            .andExpect(status().isOk)
+            .andExpect(header().string("Content-Type", "text/csv;charset=UTF-8"))
+            .andExpect(header().string("Content-Disposition", "attachment; filename=\"contracts-2026-10-13.csv\""))
+            .andExpect(content().bytes(ContractsCsv.write(listOf(testContract())).toByteArray(Charsets.UTF_8)))
+    }
+
+    @Test
+    fun `import adds the contracts of the file to the user's contracts`() {
+        mockMvc.perform(importRequest("type,company\r\nRent,ACME\r\nGym,Muscles\r\n"))
+            .andExpect(status().is3xxRedirection)
+            .andExpect(redirectedUrl("/contracts"))
+            .andExpect(flash().attribute("importedCount", 2))
+        verify(repository).saveAll(listOf(Contract(testUserId, "Rent", "ACME"), Contract(testUserId, "Gym", "Muscles")))
+        verify(repository, never()).deleteAll(any())
+    }
+
+    @Test
+    fun `import with replace deletes the user's existing contracts first`() {
+        given(repository.findByUserId(testUserId)).willReturn(listOf(testContract()))
+        mockMvc.perform(importRequest("type,company\r\nRent,ACME\r\n").param("replace", "true"))
+            .andExpect(flash().attribute("importedCount", 1))
+        val order = inOrder(repository)
+        order.verify(repository).deleteAll(listOf(testContract()))
+        order.verify(repository).saveAll(listOf(Contract(testUserId, "Rent", "ACME")))
+    }
+
+    @Test
+    fun `import errors show row numbers without grouping, but the contract limit with it`() {
+        val csv = "type,company\r\n" + "Rent,ACME\r\n".repeat(ContractsCsv.MAX_CONTRACTS + 1)
+        mockMvc.perform(importRequest(csv))
+            .andExpect(flash().attribute("importErrors", listOf("Row 10002: The file has more than 10,000 contracts, please split it")))
+        verifyNoInteractions(repository)
+    }
+
+    @Test
+    fun `invalid import changes nothing and shows the localized errors`() {
+        given(repository.findByUserId(testUserId)).willReturn(listOf(testContract()))
+        val errors = mockMvc.perform(importRequest("type,company\r\nRent,\r\n").param("replace", "true").param("locale", "de"))
+            .andExpect(redirectedUrl("/import-export"))
+            .andExpect(flash().attribute("importErrors", listOf("Zeile 2, Spalte company: Bitte fülle dieses Feld aus")))
+            .andReturn().flashMap["importErrors"]
+        verify(repository, never()).deleteAll(any())
+        verify(repository, never()).saveAll(any<Iterable<Contract>>())
+
+        mockMvc.perform(get("/import-export").with(user(testUser)).flashAttr("importErrors", errors!!))
+            // the errors are flashed already localized, in the language of the import request
+            .andExpect(content().string(containsString("<li>Zeile 2, Spalte company: Bitte fülle dieses Feld aus</li>")))
+    }
+
+    @Test
+    fun `too large import is redirected to the import-export page, which shows the size limit`() {
+        // the filter only checks the declared size, so the body doesn't need to be a valid multipart request
+        mockMvc.perform(
+            importRequest("type,company\r\nRent,ACME\r\n").with { it.apply { setContent(ByteArray(2112 * 1024 + 1)) } }
+        ).andExpect(redirectedUrl("/import-export?tooLarge"))
+        verifyNoInteractions(repository)
+
+        mockMvc.perform(get("/import-export").param("tooLarge", "").with(user(testUser)))
+            .andExpect(content().string(matchesPattern(
+                "(?s).*<div class=\"alert alert-danger\" role=\"alert\">The file is too large, it may have at most 2 MB</div>.*"
+            )))
+    }
+
+    @Test
+    fun `import of a 2 MB file is accepted, including the rest of the upload request`() {
+        // the CSRF token, the form fields and the multipart boundaries take less than 1 KB
+        mockMvc.perform(
+            importRequest("type,company\r\nRent,ACME\r\n").with { it.apply { setContent(ByteArray(2 * 1024 * 1024 + 1024)) } }
+        ).andExpect(redirectedUrl("/contracts"))
+        verify(repository).saveAll(listOf(Contract(testUserId, "Rent", "ACME")))
+    }
+
+    @Test
+    fun `import-export page shows no size error without the parameter`() {
+        mockMvc.perform(get("/import-export").with(user(testUser)))
+            .andExpect(content().string(not(containsString("too large"))))
+    }
+
+    @Test
+    fun `uploads may have 2 MB plus headroom, the same for the file and the whole request`(@Autowired environment: Environment) {
+        // only UploadSizeFilter may reject an upload: Tomcat's own file size check fails without any response
+        assertEquals(DataSize.ofKilobytes(2112), environment.getProperty("spring.servlet.multipart.max-file-size", DataSize::class.java))
+        assertEquals(DataSize.ofKilobytes(2112), environment.getProperty("spring.servlet.multipart.max-request-size", DataSize::class.java))
+    }
+
+    @Test
+    fun `import requires a CSRF token`() {
+        mockMvc.perform(multipart("/contracts/import").file(csvFile("type,company\r\nRent,ACME\r\n")).with(user(testUser)))
+            .andExpect(status().isForbidden)
+        verifyNoInteractions(repository)
+    }
+
+    @Test
+    fun `import-export page has an export link and an import form with CSRF token`() {
+        mockMvc.perform(get("/import-export").with(user(testUser)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(matchesPattern(
+                "(?s).*<a class=\"nav-link active\" href=\"/import-export\">Backup</a>.*"
+            )))
+            .andExpect(content().string(containsString("href=\"/contracts/export\"")))
+            .andExpect(content().string(matchesPattern(
+                "(?s).*<form[^>]*method=\"post\"[^>]*enctype=\"multipart/form-data\"[^>]*action=\"/contracts/import\"[^>]*>" +
+                        "\\s*<input type=\"hidden\" name=\"_csrf\" value=\"[^\"]+\"\\s*/?>.*"
+            )))
+    }
+
+    @Test
+    fun `import-export menu item is only shown to logged in users`() {
+        mockMvc.perform(get("/contracts").with(user(testUser)))
+            .andExpect(content().string(containsString("href=\"/import-export\"")))
+        mockMvc.perform(get("/"))
+            .andExpect(content().string(not(containsString("href=\"/import-export\""))))
+        mockMvc.perform(get("/import-export"))
+            .andExpect(redirectedUrl("/login"))
+    }
+
+    private fun csvFile(csv: String) = MockMultipartFile("file", "contracts.csv", "text/csv", csv.toByteArray())
+
+    private fun importRequest(csv: String) =
+        multipart("/contracts/import").file(csvFile(csv)).with(user(testUser)).with(csrf())
 
     /**
      * @return a matcher for a page containing the period input [id] with the given value and selected unit

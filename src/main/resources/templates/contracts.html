@@ -4,6 +4,8 @@
 <body>
 <nav th:replace="~{fragments/header :: nav('contracts')}"></nav>
 <main role="main" class="container">
+    <div class="alert alert-success" role="alert" th:if="${importedCount != null}"
+         th:text="#{contracts.import.success(${importedCount})}">Contracts imported</div>
     <div class="mb-3 float-start form-check">
         <input class="form-check-input" type="checkbox" value="" id="filter" checked>
         <label class="form-check-label" for="filter" th:text="#{action.hideInactive}">Hide inactive</label>
