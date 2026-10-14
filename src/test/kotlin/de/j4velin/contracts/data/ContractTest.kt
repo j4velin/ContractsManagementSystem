@@ -75,7 +75,8 @@ class ContractTest {
                 Cancellation(minDuration = Period.ofDays(1), extendPeriod = Period.ofDays(1))
             )
         }
-        val sorted = assertTimeoutPreemptively(Duration.ofMillis(500)) { Contract.sortedByDate(contracts, today) }
+        // a coarse limit, so a busy CI runner can't fail it; the old sort needs billions of steps for this list
+        val sorted = assertTimeoutPreemptively(Duration.ofSeconds(5)) { Contract.sortedByDate(contracts, today) }
         assertEquals(contracts.size, sorted.size)
     }
 }

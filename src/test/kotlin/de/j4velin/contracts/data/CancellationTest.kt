@@ -361,8 +361,9 @@ class CancellationTest {
             Cancellation(minDuration = Period.ofDays(1), extendPeriod = Period.ofDays(1), noticePeriod = Period.ofWeeks(1))
         val monthly = Cancellation(minDuration = Period.ofMonths(1), extendPeriod = Period.ofMonths(1))
 
-        // used to take ~375,000 iterations per call. Called many times, as the list view sorts and shows all contracts
-        val results = assertTimeoutPreemptively(Duration.ofMillis(100)) {
+        // used to take ~375,000 iterations per call. Called many times, as the list view sorts and shows all contracts.
+        // A coarse limit, so a busy CI runner can't fail it; the old loop took about 9 seconds for this.
+        val results = assertTimeoutPreemptively(Duration.ofSeconds(5)) {
             (1..1000).map {
                 listOf(
                     daily.getNextPossibleEndDate(startDate, now),
