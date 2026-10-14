@@ -3,6 +3,7 @@ package de.j4velin.contracts.data
 import de.j4velin.contracts.localized
 import de.j4velin.contracts.parseDate
 import org.springframework.data.annotation.Id
+import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
 import java.time.LocalDate
 
@@ -20,6 +21,8 @@ import java.time.LocalDate
 @Document
 @ConsistentCopyVisibility
 data class Contract internal constructor(
+    // every list view queries by the owner (ContractsRepository.findByUserId)
+    @field:Indexed
     val userId: String,
     val type: String,
     val company: String,
@@ -54,7 +57,7 @@ data class Contract internal constructor(
      * @return a localized string representation of the next possible ending or the latest date to cancel the contract or
      * null, if no such information is available
      */
-    fun getLocalizedEndDate() = getLatestPossibleCancelDate()?.localized() ?: getNextPossibleEndDate()?.localized()
+    fun getLocalizedEndDate() = getSortDate()?.localized()
 
     /**
      * @return true, if this contract is considered to be 'active', e.g. if it is not yet canceled, the end date is in
@@ -74,25 +77,39 @@ data class Contract internal constructor(
         return this
     }
 
-    override fun compareTo(other: Contract): Int {
-        val thisDate = getLatestPossibleCancelDate() ?: getNextPossibleEndDate()
-        val otherDate = other.getLatestPossibleCancelDate() ?: other.getNextPossibleEndDate()
-        return when {
-            thisDate == null -> if (otherDate == null) 0 else 1
-            otherDate == null -> -1
-            else -> thisDate.compareTo(otherDate)
-        }
+    /**
+     * Compares by [getSortDate]. Calculates both dates on every call: to sort many contracts, prefer [sortedByDate],
+     * which calculates them only once per contract
+     */
+    override fun compareTo(other: Contract) = SORT_DATE_ORDER.compare(getSortDate(), other.getSortDate())
+
+    /**
+     * @param now LocalDate.now() (parameterized for testing)
+     * @return the latest date to cancel the contract in time or, if no notice period is set or the contract is already
+     * canceled, the date of the next possible ending. Null, if neither information is available
+     */
+    internal fun getSortDate(now: LocalDate = LocalDate.now()) =
+        cancellation.getLatestPossibleCancelDate(startDate, now) ?: cancellation.getNextPossibleEndDate(startDate, now)
+
+    companion object {
+        /**
+         * Earlier dates first, contracts without a date last
+         */
+        private val SORT_DATE_ORDER = nullsLast(naturalOrder<LocalDate>())
+
+        /**
+         * Sorts the contracts the same way as their natural order ([compareTo]), but calculates each contract's
+         * [getSortDate] only once
+         *
+         * @param contracts the contracts to sort
+         * @param now LocalDate.now() (parameterized for testing)
+         * @return the sorted contracts
+         */
+        internal fun sortedByDate(contracts: Iterable<Contract>, now: LocalDate = LocalDate.now()): List<Contract> =
+            contracts.map { it to it.getSortDate(now) }
+                .sortedWith(compareBy(SORT_DATE_ORDER) { it.second })
+                .map { it.first }
     }
-
-    /**
-     * @return the date of the next possible ending of the contract. Might be null if that information is not available
-     */
-    private fun getNextPossibleEndDate() = cancellation.getNextPossibleEndDate(startDate)
-
-    /**
-     * @return the latest date to cancel the contract in time. Might be null if that information is not available
-     */
-    private fun getLatestPossibleCancelDate() = cancellation.getLatestPossibleCancelDate(startDate)
 }
 
 data class ContractDTO(
