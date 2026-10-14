@@ -184,6 +184,16 @@ class ContractsControllerTest {
     }
 
     @Test
+    fun `contracts page explains how cancel dates are calculated`() {
+        given(repository.findByUserId(testUserId)).willReturn(listOf(testContract()))
+        mockMvc.perform(get("/contracts").with(user(testUser)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("Cancel dates leave the full notice period before the end date")))
+        mockMvc.perform(get("/contracts").param("locale", "de").with(user(testUser)))
+            .andExpect(content().string(containsString("volle Kündigungsfrist vor dem Enddatum")))
+    }
+
+    @Test
     fun `contracts page renders toggles as POST forms with CSRF token`() {
         given(repository.findByUserId(testUserId)).willReturn(listOf(testContract()))
         val result = mockMvc.perform(get("/contracts").with(user(testUser)))

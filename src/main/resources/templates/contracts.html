@@ -73,6 +73,7 @@
         </tr>
         </tbody>
     </table>
+    <p class="small text-muted" th:text="#{contracts.cancelDate.hint}">Cancel dates leave the full notice period before the end date.</p>
     <a th:href="@{/contracts/add}" class="btn btn-primary mt-4" th:text="#{contract.action.add}">Add Contract</a>
 </main>
 <div th:replace="~{fragments/footer :: footer}"></div>
