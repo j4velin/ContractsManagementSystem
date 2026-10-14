@@ -85,11 +85,17 @@ class ContractsControllerTest {
 
     @Test
     fun `anonymous users are redirected to the login page`() {
-        // guards the shared test setup: with Spring Boot's default security instead of WebSecurityConfig, this
-        // would be a 401
         mockMvc.perform(get("/contracts"))
             .andExpect(status().is3xxRedirection)
             .andExpect(redirectedUrl("/login"))
+    }
+
+    @Test
+    fun `anonymous users can open the public home page`() {
+        // guards the shared test setup: only WebSecurityConfig makes "/" public. Spring Boot's default security
+        // (if the setup didn't import it) would redirect to its login page here, just like for "/contracts"
+        mockMvc.perform(get("/"))
+            .andExpect(status().isOk)
     }
 
     @Test
