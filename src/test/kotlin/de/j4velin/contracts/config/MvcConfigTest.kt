@@ -1,7 +1,7 @@
 package de.j4velin.contracts.config
 
 import de.j4velin.contracts.data.ContractsRepository
-import de.j4velin.contracts.user.data.UsersRepository
+import de.j4velin.contracts.testsupport.ContractsWebMvcTest
 import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -10,10 +10,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
-import org.springframework.context.annotation.Import
 import org.springframework.mock.web.MockHttpSession
-import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -22,25 +19,13 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.view
 
-@WebMvcTest
-// SecurityFilterChain beans aren't picked up by @WebMvcTest automatically
-@Import(WebSecurityConfig::class)
+@ContractsWebMvcTest
+// required by ContractsController, which is loaded as this test covers all controllers
+@MockitoBean(types = [ContractsRepository::class])
 class MvcConfigTest {
 
     @Autowired
     private lateinit var mockMvc: MockMvc
-
-    // required by ContractsController
-    @MockitoBean
-    private lateinit var contractsRepository: ContractsRepository
-
-    // required by UserController and UserLocaleResolver
-    @MockitoBean
-    private lateinit var usersRepository: UsersRepository
-
-    // required by WebSecurityConfig (remember-me)
-    @MockitoBean
-    private lateinit var userDetailsService: UserDetailsService
 
     private val englishPromo = "A simple contracts management system"
     private val germanPromo = "Ein einfaches Vertragsverwaltungs-Tool"
