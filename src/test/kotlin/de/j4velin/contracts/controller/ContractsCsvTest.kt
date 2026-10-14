@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.ValueSource
 import java.time.LocalDate
 import java.time.Period
@@ -93,13 +94,30 @@ class ContractsCsvTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = ["type;company;\"unknown,column\"\r\n", ";;\r\n\r\ntype;company;x\r\n","\"x\r\ny,z\";type;company\r\n"])
-    fun `separator is detected from the header, ignoring quoted cells and blank rows before it`(header: String) {
-        val columns = ContractsCsv.parse(header).last { row -> row.any { it.isNotBlank() } }
+    @ValueSource(
+        strings = [
+            "type;company;\"unknown,column\"\r\n", "type;company;unknown,column\r\n", ";;\r\n\r\ntype;company;x\r\n",
+            "\"x\r\ny,z\";type;company\r\n"
+        ]
+    )
+    fun `separator is the one, with which the header has the required columns`(header: String) {
+        assertEquals(';', ContractsCsv.detectSeparator(header))
+        val columns = ContractsCsv.parse(header, ';').last { row -> row.any { it.isNotBlank() } }
         val row = columns.joinToString(";") { if (it == "type") "Rent" else if (it == "company") "ACME" else "" }
         val result = read(header + row + "\r\n")
         assertEquals(emptyList<ContractsCsv.ImportError>(), result.errors)
         assertEquals(listOf(Contract(userId, "Rent", "ACME")), result.contracts)
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        delimiter = '|',
+        value = ["type,company,a;b|,", "type,company,\"a;b\"|,", "type;notes|;", "notes,x;y|,", "|,", "unknown|,"]
+    )
+    fun `separator without all required columns is the one with more known columns, by default a comma`(
+        header: String?, separator: Char
+    ) {
+        assertEquals(separator, ContractsCsv.detectSeparator(header ?: ""))
     }
 
     @Test

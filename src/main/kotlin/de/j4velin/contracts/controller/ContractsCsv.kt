@@ -96,11 +96,9 @@ object ContractsCsv {
      * @return the contracts, or the errors, if any row is invalid. The contracts have no id, so saving them adds them
      */
     fun read(bytes: ByteArray, userId: String): ImportResult {
-        // numbered before skipping blank rows (spreadsheet programs often add some at the end), so that errors name
-        // the row as the spreadsheet program shows it
-        val rows = parse(decode(bytes).removePrefix(BOM.toString()))
-            .mapIndexed { index, row -> IndexedValue(index + 1, row) }
-            .filterNot { (_, row) -> row.all { it.isBlank() } }
+        // spreadsheet programs often add blank rows at the end
+        val text = decode(bytes).removePrefix(BOM.toString())
+        val rows = nonBlankRows(parse(text, detectSeparator(text)))
         val (headerRow, header) = rows.firstOrNull() ?: return failure(ImportError(1, null, message(ERROR_EMPTY)))
         val columnIndex = header.withIndex().associate { it.value.trim() to it.index }
         val missing = REQUIRED_COLUMNS.filterNot { it in columnIndex }
@@ -226,10 +224,11 @@ object ContractsCsv {
 
     /**
      * Splits a CSV file into rows and cells (RFC 4180): quoted cells may contain separators, line breaks and doubled
-     * quotes. The separator is detected from the header, see [detectSeparator]
+     * quotes
+     *
+     * @param separator the separator of the cells, see [detectSeparator]
      */
-    internal fun parse(text: String): List<List<String>> {
-        val separator = detectSeparator(text)
+    internal fun parse(text: String, separator: Char = ','): List<List<String>> {
         val rows = mutableListOf<List<String>>()
         var row = mutableListOf<String>()
         val cell = StringBuilder()
@@ -272,31 +271,31 @@ object ContractsCsv {
     }
 
     /**
-     * Detects the separator from the header, the first row which isn't blank. Only counts separators outside quoted
-     * cells, as a quoted column name may contain the other separator
-     *
-     * @return a semicolon, if the header contains one but no comma, and a comma otherwise
+     * @return the rows, which aren't blank, each with its row number (counted before skipping blank rows, so that the
+     * number is the row as a spreadsheet program shows it)
      */
-    private fun detectSeparator(text: String): Char {
-        var quoted = false
-        var commas = 0
-        var semicolons = 0
-        // whether the current row has a cell value, otherwise it is blank (like ",,," at the start of the file)
-        var content = false
-        for (c in text) {
-            when {
-                c == '"' -> quoted = !quoted
-                quoted -> if (!c.isWhitespace()) content = true
-                c == ',' -> commas++
-                c == ';' -> semicolons++
-                c == '\n' || c == '\r' -> if (content) break else {
-                    commas = 0
-                    semicolons = 0
-                }
+    private fun nonBlankRows(rows: List<List<String>>): List<IndexedValue<List<String>>> =
+        rows.mapIndexed { index, row -> IndexedValue(index + 1, row) }
+            .filterNot { (_, row) -> row.all { it.isBlank() } }
 
-                !c.isWhitespace() -> content = true
-            }
+    /**
+     * Detects the separator by reading the header (the first row, which isn't blank) with each of them: column names
+     * may contain the other separator, quoted or not, so counting separators isn't reliable
+     *
+     * @return the separator, with which the header has all required columns. Otherwise, the one, with which it has
+     * more of the known [COLUMNS], and a comma, if that's a tie (the file is invalid then anyway)
+     */
+    internal fun detectSeparator(text: String): Char {
+        val headers = SEPARATORS.associateWith { separator ->
+            nonBlankRows(parse(text, separator)).firstOrNull()?.value.orEmpty().map { it.trim() }
         }
-        return if (semicolons > 0 && commas == 0) ';' else ','
+        return headers.entries.firstOrNull { (_, header) -> header.containsAll(REQUIRED_COLUMNS) }?.key
+            ?: headers.maxBy { (_, header) -> header.count { it in COLUMNS } }.key
     }
+
+    /**
+     * The separators of the supported files, the default first: commas, as written by [write], or semicolons, as
+     * saved by Excel in many European locales
+     */
+    private val SEPARATORS = listOf(',', ';')
 }

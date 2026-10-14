@@ -3,6 +3,7 @@ package de.j4velin.contracts.controller
 import de.j4velin.contracts.data.Contract
 import de.j4velin.contracts.data.ContractsRepository
 import de.j4velin.contracts.user.data.User
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.MessageSource
 import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.http.ContentDisposition
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
+import org.springframework.util.unit.DataSize
 import org.springframework.validation.BindingResult
 import org.springframework.web.bind.WebDataBinder
 import org.springframework.web.bind.annotation.GetMapping
@@ -33,7 +35,8 @@ import java.time.LocalDate
 class ContractsController(
     private val repository: ContractsRepository,
     private val clock: Clock,
-    private val messageSource: MessageSource
+    private val messageSource: MessageSource,
+    @Value("\${spring.servlet.multipart.max-request-size}") private val maxUploadSize: DataSize
 ) {
 
     /**
@@ -84,10 +87,14 @@ class ContractsController(
     }
 
     /**
-     * The page to export and import the contracts. Also shows the errors of a failed import
+     * The page to export and import the contracts. Also shows the errors of a failed import, and that the uploaded
+     * file was too large, if redirected here by UploadSizeFilter
      */
     @GetMapping("/import-export")
-    fun getImportExport() = IMPORT_EXPORT_VIEW
+    fun getImportExport(model: Model): String {
+        model.addAttribute("maxUploadMegabytes", maxUploadSize.toMegabytes())
+        return IMPORT_EXPORT_VIEW
+    }
 
     /**
      * Downloads all contracts of the user as a CSV file, see [ContractsCsv]
@@ -235,8 +242,8 @@ class ContractsController(
         const val CONTRACT_ID = "contractId"
 
         /**
-         * The flash attributes of the import result, shown on the contracts list: the number of imported contracts,
-         * or the localized error messages
+         * The flash attributes of the import result: the number of imported contracts, shown on the contracts list,
+         * or the localized error messages, shown on the import/export page
          */
         const val IMPORTED_COUNT = "importedCount"
         const val IMPORT_ERRORS = "importErrors"

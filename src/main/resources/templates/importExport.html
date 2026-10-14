@@ -4,6 +4,8 @@
 <body>
 <nav th:replace="~{fragments/header :: nav('importExport')}"></nav>
 <main role="main" class="container">
+    <div class="alert alert-danger" role="alert" th:if="${param.tooLarge != null}"
+         th:text="#{contracts.import.error.tooLarge(${maxUploadMegabytes})}">The file is too large</div>
     <div class="alert alert-danger" role="alert" th:if="${importErrors != null}">
         <p class="fw-bold" th:text="#{contracts.import.failed}">Nothing was imported</p>
         <ul class="mb-0">

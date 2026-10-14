@@ -5,11 +5,14 @@ import de.j4velin.contracts.user.data.UsersRepository
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.PropertySource
 import org.springframework.web.servlet.LocaleResolver
 import java.time.Clock
 
 
 @SpringBootApplication
+// lowest precedence: application.properties and environment variables override these defaults
+@PropertySource("classpath:defaults.properties")
 class ContractsApplication {
     @Bean
     fun localeResolver(usersRepository: UsersRepository): LocaleResolver = UserLocaleResolver(usersRepository)

@@ -25,6 +25,7 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.core.env.Environment
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user
@@ -41,6 +42,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.model
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.view
+import org.springframework.util.unit.DataSize
 import java.time.Clock
 import java.time.LocalDate
 import java.time.Period
@@ -543,6 +545,40 @@ class ContractsControllerTest {
         mockMvc.perform(get("/import-export").with(user(testUser)).flashAttr("importErrors", errors!!))
             // the errors are flashed already localized, in the language of the import request
             .andExpect(content().string(containsString("<li>Zeile 2, Spalte company: Bitte fülle dieses Feld aus</li>")))
+    }
+
+    @Test
+    fun `too large import is redirected to the import-export page, which shows the size limit`() {
+        // the filter only checks the declared size, so the body doesn't need to be a valid multipart request
+        mockMvc.perform(
+            importRequest("type,company\r\nRent,ACME\r\n").with { it.apply { setContent(ByteArray(2 * 1024 * 1024 + 1)) } }
+        ).andExpect(redirectedUrl("/import-export?tooLarge"))
+        verifyNoInteractions(repository)
+
+        mockMvc.perform(get("/import-export").param("tooLarge", "").with(user(testUser)))
+            .andExpect(content().string(matchesPattern(
+                "(?s).*<div class=\"alert alert-danger\" role=\"alert\">The file is too large, it may have at most 2 MB</div>.*"
+            )))
+    }
+
+    @Test
+    fun `import up to the size limit is accepted`() {
+        mockMvc.perform(
+            importRequest("type,company\r\nRent,ACME\r\n").with { it.apply { setContent(ByteArray(2 * 1024 * 1024)) } }
+        ).andExpect(redirectedUrl("/contracts"))
+        verify(repository).saveAll(listOf(Contract(testUserId, "Rent", "ACME")))
+    }
+
+    @Test
+    fun `import-export page shows no size error without the parameter`() {
+        mockMvc.perform(get("/import-export").with(user(testUser)))
+            .andExpect(content().string(not(containsString("too large"))))
+    }
+
+    @Test
+    fun `uploads may be larger than Spring Boot's default limit of 1 MB`(@Autowired environment: Environment) {
+        assertEquals(DataSize.ofMegabytes(2), environment.getProperty("spring.servlet.multipart.max-file-size", DataSize::class.java))
+        assertEquals(DataSize.ofMegabytes(2), environment.getProperty("spring.servlet.multipart.max-request-size", DataSize::class.java))
     }
 
     @Test
