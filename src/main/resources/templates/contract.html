@@ -106,13 +106,11 @@
         <div class="w-100">
             <input type="submit" th:value="#{action.save}" class="btn btn-primary mt-3"/>
             <button th:if="${contract}" type="submit" form="deleteForm" class="btn btn-outline-danger mt-3 float-end"
-                    th:text="#{action.delete}" th:data-confirm="#{contract.action.delete.confirm}"
-                    onclick="return confirm(this.dataset.confirm)">Delete</button>
+                    th:text="#{action.delete}" th:data-confirm="#{contract.action.delete.confirm}">Delete</button>
         </div>
     </form>
     <form th:if="${contract}" id="deleteForm" method="post" th:action="@{/contracts/{id}/delete(id=${contract.id})}"></form>
 </main>
 <div th:replace="~{fragments/footer :: footer}"></div>
-<div th:replace="~{fragments/scripts :: formvalidation}"></div>
 </body>
 </html>
