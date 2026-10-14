@@ -10,8 +10,8 @@ name: Java CI with Gradle
 on:
   push:
     branches: [ "main" ]
-    # version tags like v1.2.0 publish a Docker image, see the publish job
-    tags: [ "v*" ]
+    # version tags like 1.2.0 (or v1.2.0) publish a Docker image, see the publish job
+    tags: [ "[0-9]*", "v[0-9]*" ]
   pull_request:
     branches: [ "main" ]
 
@@ -70,11 +70,11 @@ jobs:
       if: always()
       run: docker compose down --volumes
 
-  # Publishes the Docker image to the GitHub Container Registry for version tags (e.g. v1.2.0), after the tests and
+  # Publishes the Docker image to the GitHub Container Registry for version tags (e.g. 1.2.0), after the tests and
   # the smoke test passed for the tagged commit. Servers then only pull the finished image instead of building it
   publish:
 
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     needs: [ build, docker ]
 
     runs-on: ubuntu-latest
@@ -107,7 +107,7 @@ jobs:
       uses: docker/metadata-action@v6
       with:
         images: ${{ env.IMAGE }}
-        # v1.2.0 is published as 1.2.0; "latest" is moved separately below
+        # 1.2.0 (or v1.2.0) is published as 1.2.0; "latest" is moved separately below
         tags: |
           type=semver,pattern={{version}}
         flavor: |
@@ -125,16 +125,17 @@ jobs:
 
     # "latest" points to the newest release that has a published image. Every release run publishes its own version
     # tag (nothing is queued or dropped) and then only moves "latest" if no newer release is published: so a release
-    # for an older line (v1.0.1 after v1.1.0), a slower run, or a failed newer release never makes "latest" go back to
-    # older code. Pre-releases like v2.0.0-rc1 never become "latest". Moving the tag only copies the manifest
+    # for an older line (1.0.1 after 1.1.0), a slower run, or a failed newer release never makes "latest" go back to
+    # older code. Pre-releases like 2.0.0-rc1 never become "latest". Moving the tag only copies the manifest
     - name: Move latest to the newest published release
       run: |
         git fetch --tags --force --quiet
         version=${GITHUB_REF_NAME#v}
         newest=""
-        for tag in $(git tag --list 'v*' | grep -E '^v[0-9]+(\.[0-9]+)*$' | sort -rV); do
-          if docker buildx imagetools inspect "$IMAGE:${tag#v}" > /dev/null 2>&1; then
-            newest=${tag#v}
+        # release versions from tags like 1.2.0 or v1.2.0, newest first
+        for release in $(git tag --list | grep -E '^v?[0-9]+(\.[0-9]+)*$' | sed 's/^v//' | sort -rVu); do
+          if docker buildx imagetools inspect "$IMAGE:$release" > /dev/null 2>&1; then
+            newest=$release
             break
           fi
         done

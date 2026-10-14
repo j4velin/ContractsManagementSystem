@@ -6,7 +6,7 @@ Spring Boot webapp to manage contracs, subscriptions etc.
 ## Run with Docker
 
 Starts the app together with a MongoDB database (data is kept in the `mongo-data` volume). For every version tag
-(e.g. `v1.2.0`), CI publishes a ready-built image to `ghcr.io/j4velin/contractsmanagementsystem`, so a server only
+(e.g. `1.2.0`), CI publishes a ready-built image to `ghcr.io/j4velin/contractsmanagementsystem`, so a server only
 needs to download it:
 
 ```bash
@@ -19,7 +19,7 @@ version. To release a version, tag a commit on `main` and push the tag; the imag
 the smoke test passed for it:
 
 ```bash
-git tag v1.2.0 && git push origin v1.2.0
+git tag 1.2.0 && git push origin 1.2.0
 ```
 To build the image from the checkout instead, e.g. for local changes, use `docker compose up -d --build`.
 
