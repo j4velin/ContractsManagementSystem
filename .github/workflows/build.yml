@@ -79,10 +79,8 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    # one publish at a time, so two releases pushed shortly after each other can't overwrite each other's tags
-    concurrency:
-      group: publish-image
-      cancel-in-progress: false
+    env:
+      IMAGE: ghcr.io/j4velin/contractsmanagementsystem
 
     permissions:
       contents: read
@@ -91,21 +89,8 @@ jobs:
     steps:
     - uses: actions/checkout@v7
       with:
-        # all tags, to find out whether this is the newest release
+        # all tags, to find the newest published release
         fetch-depth: 0
-
-    # Only the newest release may move "latest": e.g. v1.0.1 released after v1.1.0 must not make servers pulling
-    # "latest" go back to the older code. Pre-releases like v2.0.0-rc1 never become "latest"
-    - name: Check whether this is the newest release
-      id: release
-      run: |
-        newest=$(git tag --list 'v*' | grep -E '^v[0-9]+(\.[0-9]+)*$' | sort -V | tail -n 1)
-        echo "newest release: $newest, this one: $GITHUB_REF_NAME"
-        if [ "$newest" = "$GITHUB_REF_NAME" ]; then
-          echo "latest=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "latest=false" >> "$GITHUB_OUTPUT"
-        fi
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
@@ -121,12 +106,10 @@ jobs:
       id: meta
       uses: docker/metadata-action@v6
       with:
-        images: ghcr.io/j4velin/contractsmanagementsystem
-        # v1.2.0 is published as 1.2.0 and 1.2, and also as latest if it's the newest release
+        images: ${{ env.IMAGE }}
+        # v1.2.0 is published as 1.2.0; "latest" is moved separately below
         tags: |
           type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=raw,value=latest,enable=${{ steps.release.outputs.latest }}
         flavor: |
           latest=false
 
@@ -139,3 +122,25 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+
+    # "latest" points to the newest release that has a published image. Every release run publishes its own version
+    # tag (nothing is queued or dropped) and then only moves "latest" if no newer release is published: so a release
+    # for an older line (v1.0.1 after v1.1.0), a slower run, or a failed newer release never makes "latest" go back to
+    # older code. Pre-releases like v2.0.0-rc1 never become "latest". Moving the tag only copies the manifest
+    - name: Move latest to the newest published release
+      run: |
+        git fetch --tags --force --quiet
+        version=${GITHUB_REF_NAME#v}
+        newest=""
+        for tag in $(git tag --list 'v*' | grep -E '^v[0-9]+(\.[0-9]+)*$' | sort -rV); do
+          if docker buildx imagetools inspect "$IMAGE:${tag#v}" > /dev/null 2>&1; then
+            newest=${tag#v}
+            break
+          fi
+        done
+        echo "newest published release: ${newest:-none}, this one: $version"
+        if [ "$newest" = "$version" ]; then
+          docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE:$version"
+        else
+          echo "latest stays as it is"
+        fi
