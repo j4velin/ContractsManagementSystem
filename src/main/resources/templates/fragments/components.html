@@ -1,18 +1,18 @@
-<!--/* period: a java.time.Period or null. The form only creates single-unit periods; weeks are stored as days, so
-     a whole number of weeks is shown in weeks */-->
-<div xmlns:th="http://www.thymeleaf.org" class="mb-3" th:fragment="period(label, id, period)">
+<!--/* period: the two form fields of a period of the enclosing th:object (a ContractForm): "<id>Value", the number of
+     units, and "<id>Unit", one of D, W, M or Y. ContractForm prefills them from a stored period */-->
+<div xmlns:th="http://www.thymeleaf.org" class="mb-3" th:fragment="period(label, id)">
     <label th:for="${id}" class="form-label" th:text="${label}"></label>
-    <div class="input-group mb-3"
-         th:with="unit=${period == null ? '' : (period.years != 0 ? 'Y' : (period.months != 0 ? 'M' : (period.days != 0 and period.days % 7 == 0 ? 'W' : 'D')))},
-                  amount=${period == null ? '' : (unit == 'Y' ? period.years : (unit == 'M' ? period.months : (unit == 'W' ? period.days / 7 : period.days)))}">
-        <input type="number" class="form-control" th:id="${id}" th:name="${id} + 'Value'"
-               size="3" min="0" max="999" step="1" th:value="${amount}">
-        <select class="form-select" th:id="${id} + 'Unit'" th:name="${id} + 'Unit'">
+    <div class="input-group has-validation mb-3">
+        <input type="number" class="form-control" th:id="${id}" th:field="*{__${id}__Value}"
+               th:errorclass="is-invalid" size="3" min="0" max="999" step="1">
+        <select class="form-select" th:id="${id} + 'Unit'" th:field="*{__${id}__Unit}" th:errorclass="is-invalid">
             <option value="" th:text="#{form.choose}">Choose...</option>
-            <option value="D" th:selected="${unit == 'D'}" th:text="#{form.duration.days}">days</option>
-            <option value="W" th:selected="${unit == 'W'}" th:text="#{form.duration.weeks}">weeks</option>
-            <option value="M" th:selected="${unit == 'M'}" th:text="#{form.duration.months}">months</option>
-            <option value="Y" th:selected="${unit == 'Y'}" th:text="#{form.duration.years}">years</option>
+            <option value="D" th:text="#{form.duration.days}">days</option>
+            <option value="W" th:text="#{form.duration.weeks}">weeks</option>
+            <option value="M" th:text="#{form.duration.months}">months</option>
+            <option value="Y" th:text="#{form.duration.years}">years</option>
         </select>
+        <div class="invalid-feedback" th:if="${#fields.hasErrors(id + 'Value')}" th:errors="*{__${id}__Value}"></div>
+        <div class="invalid-feedback" th:if="${#fields.hasErrors(id + 'Unit')}" th:errors="*{__${id}__Unit}"></div>
     </div>
 </div>

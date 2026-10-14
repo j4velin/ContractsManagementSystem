@@ -114,7 +114,7 @@ class CancellationTest {
         assertEquals(LocalDate.of(2026, 5, 31), cancelInfo.getNextPossibleEndDate(startDate, now))
         assertEquals(LocalDate.of(2026, 4, 30), cancelInfo.getLatestPossibleCancelDate(startDate, now))
 
-        // a null extension (fromDTO, old documents) is passed on, the schedule falls back to the min duration
+        // a null extension (ContractForm, old documents) is passed on, the schedule falls back to the min duration
         val withoutExtension = cancelInfo.copy(extendPeriod = null)
         assertNull(withoutExtension.noticeSchedule(startDate).extension)
         assertEquals(LocalDate.of(2026, 5, 31), withoutExtension.getNextPossibleEndDate(startDate, now))

@@ -1,8 +1,5 @@
 package de.j4velin.contracts.data
 
-import de.j4velin.contracts.parseDate
-import org.springframework.http.HttpStatus
-import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDate
 import java.time.Period
 
@@ -26,57 +23,6 @@ data class Cancellation(
     val canceled: Boolean = endDate != null,
     val ack: Boolean = false
 ) {
-    companion object {
-        /**
-         * Upper limit for the number of units of a period. Keeps the date calculations within the range of [LocalDate]
-         * (larger values used to crash the contract list) and matches the 3-digit input field
-         */
-        internal const val MAX_PERIOD_AMOUNT = 999
-
-        /**
-         * Creates a [Cancellation] from a [ContractDTO]
-         * @param data the DTO data
-         * @return the corresponding [Cancellation] object
-         */
-        fun fromDTO(data: ContractDTO) = Cancellation(
-            minDuration = parsePeriod(data.minDurationValue, data.minDurationUnit, "minDuration"),
-            noticePeriod = parsePeriod(data.noticePeriodValue, data.noticePeriodUnit, "noticePeriod"),
-            extendPeriod = parsePeriod(data.extendPeriodValue, data.extendPeriodUnit, "extendPeriod"),
-            endDate = parseDate(data.endDate, "endDate"),
-            canceled = data.canceled != null || data.endDate?.isBlank() == false,
-            ack = data.canceled != null && data.cancelAck != null
-        )
-
-        /**
-         * Parses a period from the separate value and unit form fields.
-         *
-         * @param value the number of units. Null or blank means "no period"
-         * @param unit the unit: D (days), W (weeks), M (months) or Y (years). Null means "no period"
-         * @param field the name of the form field, used in the error message
-         * @return the parsed [Period] or null, if either the value or the unit is not set
-         * @throws ResponseStatusException with [HttpStatus.BAD_REQUEST], if the value is not an integer between 0 and
-         * [MAX_PERIOD_AMOUNT] or the unit is unknown
-         */
-        private fun parsePeriod(value: String?, unit: Char?, field: String): Period? {
-            if (unit == null || value.isNullOrBlank()) {
-                return null
-            }
-            val amount = value.trim().takeIf { it.all { c -> c in '0'..'9' } }?.toIntOrNull()
-                ?.takeIf { it <= MAX_PERIOD_AMOUNT }
-                ?: throw ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Invalid $field value '$value': must be an integer between 0 and $MAX_PERIOD_AMOUNT"
-                )
-            return when (unit) {
-                'D' -> Period.ofDays(amount)
-                'W' -> Period.ofWeeks(amount)
-                'M' -> Period.ofMonths(amount)
-                'Y' -> Period.ofYears(amount)
-                else -> throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid $field unit '$unit'")
-            }
-        }
-    }
-
     /**
      * @return true, if any cancellation information is set
      */
@@ -93,7 +39,7 @@ data class Cancellation(
      */
     internal fun toggleCancel(startDate: LocalDate?, today: LocalDate, newAck: Boolean = false): Cancellation =
         if (canceled) {
-            // now un-canceling -> also clear the end date: a set end date implies 'canceled' (see fromDTO), and the
+            // now un-canceling -> also clear the end date: a set end date implies 'canceled' (see ContractForm), and the
             // next possible end date has to be calculated again instead of staying frozen at the old value
             copy(canceled = false, endDate = null, ack = false)
         } else {

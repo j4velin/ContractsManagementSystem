@@ -32,8 +32,10 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.model
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.view
 import java.time.Clock
 import java.time.LocalDate
 import java.time.Period
@@ -160,11 +162,170 @@ class ContractsControllerTest {
     @ParameterizedTest
     @CsvSource("'', company", "'   ', company", "type, ''", "type, '  '")
     fun `adding a contract with blank type or company is rejected`(type: String, company: String) {
+        val field = if (type.isBlank()) "type" else "company"
         mockMvc.perform(
             post("/contracts").with(user(testUser)).with(csrf())
                 .param("type", type).param("company", company)
         ).andExpect(status().isBadRequest)
+            .andExpect(view().name("contract"))
+            .andExpect(model().attributeHasFieldErrorCode("contractForm", field, "contract.error.required"))
+            .andExpect(content().string(fieldWithError(field, Regex.escape(if (field == "type") type else company), "Please fill in this field")))
         verify(repository, never()).save(any(Contract::class.java))
+    }
+
+    @Test
+    fun `adding a contract with invalid input shows the errors at their fields and keeps the entered values`() {
+        mockMvc.perform(
+            post("/contracts").with(user(testUser)).with(csrf())
+                .param("type", "Rent").param("company", " ").param("notes", "my notes")
+                .param("startDate", "2020-01-15")
+                .param("minDurationValue", "2").param("minDurationUnit", "Y")
+                .param("noticePeriodValue", "1.5").param("noticePeriodUnit", "M")
+                .param("endDate", "2021-02-30")
+                .param("bonusDescription", "cashback").param("bonusReceived", "true")
+        ).andExpect(status().isBadRequest)
+            .andExpect(view().name("contract"))
+            .andExpect(model().attributeErrorCount("contractForm", 3))
+            .andExpect(model().attributeHasFieldErrorCode("contractForm", "company", "contract.error.required"))
+            .andExpect(model().attributeHasFieldErrorCode("contractForm", "noticePeriodValue", "contract.error.periodAmount"))
+            .andExpect(model().attributeHasFieldErrorCode("contractForm", "endDate", "contract.error.date"))
+            .andExpect(content().string(fieldWithError("company", " ", "Please fill in this field")))
+            .andExpect(content().string(fieldWithError("noticePeriod", "1\\.5", "Please enter a whole number between 0 and 999")))
+            .andExpect(content().string(fieldWithError("endDate", "2021-02-30", "This is not a valid date")))
+            // the valid fields are kept as entered
+            .andExpect(content().string(matchesPattern("(?s).*<input(?=[^>]*id=\"type\")(?![^>]*is-invalid)[^>]*value=\"Rent\".*")))
+            .andExpect(content().string(matchesPattern("(?s).*<textarea[^>]*id=\"notes\"[^>]*>my notes</textarea>.*")))
+            .andExpect(content().string(matchesPattern("(?s).*<input[^>]*id=\"startDate\"[^>]*value=\"2020-01-15\".*")))
+            .andExpect(content().string(periodField("minDuration", "2", "Y")))
+            .andExpect(content().string(periodField("noticePeriod", "1\\.5", "M")))
+            .andExpect(content().string(matchesPattern("(?s).*<textarea[^>]*id=\"bonusDescription\"[^>]*>cashback</textarea>.*")))
+            .andExpect(content().string(matchesPattern("(?s).*<input[^>]*id=\"bonusReceived\"[^>]*checked=\"checked\".*")))
+            // still the add form: posts to the add URL and has no delete button
+            .andExpect(content().string(matchesPattern("(?s).*<form[^>]*action=\"/contracts\".*")))
+            .andExpect(content().string(not(containsString("deleteForm"))))
+        verify(repository, never()).save(any(Contract::class.java))
+    }
+
+    @Test
+    fun `invalid input shows the errors in German with locale de`() {
+        mockMvc.perform(
+            post("/contracts?locale=de").with(user(testUser)).with(csrf())
+                .param("type", "").param("company", "ACME")
+                .param("extendPeriodValue", "1000").param("extendPeriodUnit", "M")
+                .param("startDate", "0999-12-31")
+        ).andExpect(status().isBadRequest)
+            .andExpect(content().string(fieldWithError("type", "", "Bitte fülle dieses Feld aus")))
+            .andExpect(content().string(fieldWithError("extendPeriod", "1000", "Bitte gib eine ganze Zahl zwischen 0 und 999 ein")))
+            .andExpect(content().string(fieldWithError("startDate", "0999-12-31", "Bitte gib ein Datum mit vierstelliger Jahreszahl ein")))
+        verify(repository, never()).save(any(Contract::class.java))
+    }
+
+    @Test
+    fun `an unknown period unit is shown at the unit field`() {
+        mockMvc.perform(
+            post("/contracts").with(user(testUser)).with(csrf())
+                .param("type", "type").param("company", "company")
+                .param("minDurationValue", "1").param("minDurationUnit", "X")
+        ).andExpect(status().isBadRequest)
+            .andExpect(model().attributeHasFieldErrorCode("contractForm", "minDurationUnit", "contract.error.periodUnit"))
+            .andExpect(content().string(matchesPattern(
+                "(?s).*<select(?=[^>]*id=\"minDurationUnit\")[^>]*is-invalid[^>]*>(?:(?!</div>).)*" +
+                        "<div class=\"invalid-feedback\">Please choose one of the listed units</div>.*"
+            )))
+        verify(repository, never()).save(any(Contract::class.java))
+    }
+
+    @Test
+    fun `adding a contract saves all submitted values`() {
+        mockMvc.perform(
+            post("/contracts").with(user(testUser)).with(csrf())
+                .param("type", "Internet").param("company", "ACME").param("notes", "notes")
+                .param("startDate", "2020-01-15")
+                .param("minDurationValue", "2").param("minDurationUnit", "Y")
+                .param("noticePeriodValue", "3").param("noticePeriodUnit", "W")
+                .param("extendPeriodValue", "").param("extendPeriodUnit", "")
+                // a checked box counts whatever its value, the form used to send an empty one
+                .param("canceled", "").param("_canceled", "on")
+                .param("cancelAck", "true").param("_cancelAck", "on")
+                .param("endDate", "2022-01-14")
+                .param("bonusDescription", "cashback").param("_bonusReceived", "on")
+        ).andExpect(status().is3xxRedirection)
+            .andExpect(redirectedUrl("/contracts"))
+        val captor = ArgumentCaptor.forClass(Contract::class.java)
+        verify(repository).save(captor.capture())
+        assertEquals(
+            Contract(
+                testUserId, "Internet", "ACME", notes = "notes", startDate = LocalDate.of(2020, 1, 15),
+                cancellation = Cancellation(
+                    minDuration = Period.ofYears(2), noticePeriod = Period.ofWeeks(3), extendPeriod = null,
+                    endDate = LocalDate.of(2022, 1, 14), canceled = true, ack = true
+                ),
+                bonus = Bonus("cashback", received = false)
+            ),
+            captor.value
+        )
+    }
+
+    @Test
+    fun `updating a contract with invalid input shows the edit form again`() {
+        given(repository.findById("c1")).willReturn(Optional.of(testContract()))
+        mockMvc.perform(
+            post("/contracts/c1").with(user(testUser)).with(csrf())
+                .param("type", "Rent").param("company", "ACME")
+                .param("noticePeriodValue", "-1").param("noticePeriodUnit", "M")
+        ).andExpect(status().isBadRequest)
+            .andExpect(view().name("contract"))
+            .andExpect(content().string(fieldWithError("noticePeriod", "-1", "Please enter a whole number between 0 and 999")))
+            .andExpect(content().string(matchesPattern("(?s).*<form[^>]*action=\"/contracts/c1\".*")))
+            .andExpect(content().string(containsString("Edit Contract")))
+            .andExpect(content().string(postFormWithCsrf("/contracts/c1/delete")))
+        verify(repository, never()).save(any(Contract::class.java))
+    }
+
+    @Test
+    fun `contract of another user is not found even with invalid input`() {
+        given(repository.findById("c1")).willReturn(Optional.of(otherUsersContract()))
+        mockMvc.perform(
+            post("/contracts/c1").with(user(testUser)).with(csrf())
+                .param("type", "").param("company", "")
+        ).andExpect(status().isNotFound)
+        verify(repository, never()).save(any(Contract::class.java))
+    }
+
+    @Test
+    fun `contract page prefills the form with the stored contract`() {
+        val contract = Contract(
+            testUserId, "Rent", "ACME", notes = "some notes", startDate = LocalDate.of(2020, 1, 15),
+            cancellation = Cancellation(endDate = LocalDate.of(2027, 1, 14), canceled = true, ack = true),
+            bonus = Bonus("cashback", received = true), id = "c1"
+        )
+        given(repository.findById("c1")).willReturn(Optional.of(contract))
+        mockMvc.perform(get("/contracts/c1").with(user(testUser)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("Edit Contract")))
+            .andExpect(content().string(matchesPattern("(?s).*<form[^>]*action=\"/contracts/c1\".*")))
+            .andExpect(content().string(matchesPattern("(?s).*<input[^>]*id=\"type\"[^>]*value=\"Rent\".*")))
+            .andExpect(content().string(matchesPattern("(?s).*<input[^>]*id=\"company\"[^>]*value=\"ACME\".*")))
+            .andExpect(content().string(matchesPattern("(?s).*<textarea[^>]*id=\"notes\"[^>]*>some notes</textarea>.*")))
+            .andExpect(content().string(matchesPattern("(?s).*<input[^>]*id=\"startDate\"[^>]*value=\"2020-01-15\".*")))
+            .andExpect(content().string(matchesPattern("(?s).*<input[^>]*id=\"endDate\"[^>]*value=\"2027-01-14\".*")))
+            .andExpect(content().string(matchesPattern("(?s).*<input[^>]*id=\"canceled\"[^>]*checked=\"checked\".*")))
+            .andExpect(content().string(matchesPattern("(?s).*<input[^>]*id=\"cancelAck\"[^>]*checked=\"checked\".*")))
+            .andExpect(content().string(matchesPattern("(?s).*<textarea[^>]*id=\"bonusDescription\"[^>]*>cashback</textarea>.*")))
+            .andExpect(content().string(matchesPattern("(?s).*<input[^>]*id=\"bonusReceived\"[^>]*checked=\"checked\".*")))
+            .andExpect(content().string(not(containsString("is-invalid"))))
+    }
+
+    @Test
+    fun `add page renders an empty form without delete button`() {
+        mockMvc.perform(get("/contracts/add").with(user(testUser)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("Add Contract")))
+            .andExpect(content().string(matchesPattern("(?s).*<form[^>]*action=\"/contracts\".*")))
+            .andExpect(content().string(matchesPattern("(?s).*<input[^>]*id=\"company\"[^>]*value=\"\".*")))
+            .andExpect(content().string(not(containsString("checked=\"checked\""))))
+            .andExpect(content().string(not(containsString("deleteForm"))))
+            .andExpect(content().string(not(containsString("is-invalid"))))
     }
 
     @Test
@@ -236,6 +397,8 @@ class ContractsControllerTest {
             post("/contracts/c1").with(user(testUser)).with(csrf())
                 .param("type", type).param("company", company)
         ).andExpect(status().isBadRequest)
+            .andExpect(view().name("contract"))
+            .andExpect(model().attributeHasFieldErrorCode("contractForm", if (type.isBlank()) "type" else "company", "contract.error.required"))
         verify(repository, never()).save(any(Contract::class.java))
     }
 
@@ -338,6 +501,18 @@ class ContractsControllerTest {
     private fun periodField(id: String, value: String, unit: String) = matchesPattern(
         "(?s).*<input[^>]*id=\"$id\"[^>]*value=\"$value\".*" +
                 "<select[^>]*id=\"${id}Unit\"[^>]*>(?:(?!</select>).)*<option value=\"$unit\" selected=\"selected\".*"
+    )
+
+    /**
+     * @param id the id of the input (for a period: the period's name, its value input has that id)
+     * @param value a regex for the value the input shows
+     * @param message the error text, which the page has to show right after the input (for a period: in the same
+     * input group)
+     * @return a matcher for a page containing the input marked as invalid, followed by the given error text
+     */
+    private fun fieldWithError(id: String, value: String, message: String) = matchesPattern(
+        "(?s).*<input(?=[^>]*id=\"$id\")(?=[^>]*value=\"$value\")[^>]*is-invalid[^>]*>(?:(?!</div>).)*" +
+                "<div class=\"invalid-feedback\">${Regex.escape(message)}</div>.*"
     )
 
     /**
