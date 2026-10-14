@@ -1,6 +1,7 @@
 package de.j4velin.contracts.controller
 
 import de.j4velin.contracts.config.WebSecurityConfig
+import de.j4velin.contracts.config.assertSharedScriptWithoutInlineJs
 import de.j4velin.contracts.data.Bonus
 import de.j4velin.contracts.data.Cancellation
 import de.j4velin.contracts.data.Contract
@@ -263,6 +264,40 @@ class ContractsControllerTest {
         listOf("toggleBonus", "toggleCancel", "toggleCancelAck").forEach {
             result.andExpect(content().string(postFormWithCsrf("/contracts/c1/$it")))
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["/contracts", "/contracts/c1", "/contracts/add"])
+    fun `contract pages load the shared script and have no inline scripts or handlers`(page: String) {
+        given(repository.findByUserId(testUserId)).willReturn(listOf(testContract()))
+        given(repository.findById("c1")).willReturn(Optional.of(testContract()))
+        val html = mockMvc.perform(get(page).with(user(testUser)))
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+        assertSharedScriptWithoutInlineJs(html)
+    }
+
+    @Test
+    fun `logout is a submit button in a POST form with CSRF token`() {
+        given(repository.findByUserId(testUserId)).willReturn(listOf(testContract()))
+        mockMvc.perform(get("/contracts").with(user(testUser)))
+            .andExpect(status().isOk)
+            .andExpect(content().string(matchesPattern(
+                "(?s).*<form[^>]*action=\"/logout\"[^>]*method=\"post\"[^>]*>\\s*" +
+                        "<input type=\"hidden\" name=\"_csrf\" value=\"[^\"]+\"\\s*/?>\\s*" +
+                        "<button type=\"submit\"[^>]*>Logout</button>\\s*</form>.*"
+            )))
+    }
+
+    @Test
+    fun `delete button carries the localized confirmation text for app js`() {
+        given(repository.findById("c1")).willReturn(Optional.of(testContract()))
+        mockMvc.perform(get("/contracts/c1").with(user(testUser)))
+            .andExpect(content().string(matchesPattern(
+                "(?s).*<button[^>]*form=\"deleteForm\"[^>]*data-confirm=\"Do you really want to delete this contract\\?\".*"
+            )))
+        mockMvc.perform(get("/contracts/c1").param("locale", "de").with(user(testUser)))
+            .andExpect(content().string(containsString("data-confirm=\"Soll dieser Vertrag wirklich gelöscht werden?\"")))
     }
 
     @Test

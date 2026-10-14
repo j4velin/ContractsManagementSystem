@@ -37,7 +37,7 @@ class WebSecurityConfig(
     @Bean
     @Order(1)
     fun staticResourcesFilterChain(http: HttpSecurity): SecurityFilterChain {
-        http.securityMatcher("/webjars/**", "/favicon.svg", "/images/*")
+        http.securityMatcher("/webjars/**", "/favicon.svg", "/images/*", "/js/**")
             .authorizeHttpRequests { it.anyRequest().permitAll() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .csrf { it.disable() }

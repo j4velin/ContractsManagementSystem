@@ -5,13 +5,11 @@
 <nav th:replace="~{fragments/header :: nav('contracts')}"></nav>
 <main role="main" class="container">
     <div class="mb-3 float-start form-check">
-        <input class="form-check-input" type="checkbox" value="" id="filter" checked
-               onchange="filterContracts()">
+        <input class="form-check-input" type="checkbox" value="" id="filter" checked>
         <label class="form-check-label" for="filter" th:text="#{action.hideInactive}">Hide inactive</label>
     </div>
     <div class="row mb-3 float-end">
-        <input type="text" class="form-control" size="20" id="search" th:placeholder="#{action.search}"
-               oninput="filterContracts()">
+        <input type="text" class="form-control" size="20" id="search" th:placeholder="#{action.search}">
     </div>
     <!--/* Bootstrap 5.3 gives table cells their own (white) background and black text: keep the table on the page background */-->
     <table class="table table-hover" id="contracts" style="--bs-table-bg: transparent; --bs-table-color: var(--bs-body-color);">
@@ -77,7 +75,5 @@
     <a th:href="@{/contracts/add}" class="btn btn-primary mt-4" th:text="#{contract.action.add}">Add Contract</a>
 </main>
 <div th:replace="~{fragments/footer :: footer}"></div>
-<div th:replace="~{fragments/scripts :: filterTable}"></div>
-<div th:replace="~{fragments/scripts :: tooltips}"></div>
 </body>
 </html>
