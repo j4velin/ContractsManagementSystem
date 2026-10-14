@@ -551,7 +551,7 @@ class ContractsControllerTest {
     fun `too large import is redirected to the import-export page, which shows the size limit`() {
         // the filter only checks the declared size, so the body doesn't need to be a valid multipart request
         mockMvc.perform(
-            importRequest("type,company\r\nRent,ACME\r\n").with { it.apply { setContent(ByteArray(2 * 1024 * 1024 + 1)) } }
+            importRequest("type,company\r\nRent,ACME\r\n").with { it.apply { setContent(ByteArray(2112 * 1024 + 1)) } }
         ).andExpect(redirectedUrl("/import-export?tooLarge"))
         verifyNoInteractions(repository)
 
@@ -562,9 +562,10 @@ class ContractsControllerTest {
     }
 
     @Test
-    fun `import up to the size limit is accepted`() {
+    fun `import of a 2 MB file is accepted, including the rest of the upload request`() {
+        // the CSRF token, the form fields and the multipart boundaries take less than 1 KB
         mockMvc.perform(
-            importRequest("type,company\r\nRent,ACME\r\n").with { it.apply { setContent(ByteArray(2 * 1024 * 1024)) } }
+            importRequest("type,company\r\nRent,ACME\r\n").with { it.apply { setContent(ByteArray(2 * 1024 * 1024 + 1024)) } }
         ).andExpect(redirectedUrl("/contracts"))
         verify(repository).saveAll(listOf(Contract(testUserId, "Rent", "ACME")))
     }
@@ -576,9 +577,10 @@ class ContractsControllerTest {
     }
 
     @Test
-    fun `uploads may be larger than Spring Boot's default limit of 1 MB`(@Autowired environment: Environment) {
-        assertEquals(DataSize.ofMegabytes(2), environment.getProperty("spring.servlet.multipart.max-file-size", DataSize::class.java))
-        assertEquals(DataSize.ofMegabytes(2), environment.getProperty("spring.servlet.multipart.max-request-size", DataSize::class.java))
+    fun `uploads may have 2 MB plus headroom, the same for the file and the whole request`(@Autowired environment: Environment) {
+        // only UploadSizeFilter may reject an upload: Tomcat's own file size check fails without any response
+        assertEquals(DataSize.ofKilobytes(2112), environment.getProperty("spring.servlet.multipart.max-file-size", DataSize::class.java))
+        assertEquals(DataSize.ofKilobytes(2112), environment.getProperty("spring.servlet.multipart.max-request-size", DataSize::class.java))
     }
 
     @Test

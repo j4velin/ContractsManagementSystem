@@ -92,6 +92,7 @@ class ContractsController(
      */
     @GetMapping("/import-export")
     fun getImportExport(model: Model): String {
+        // rounded down: the limit has some headroom for the rest of the upload request, see defaults.properties
         model.addAttribute("maxUploadMegabytes", maxUploadSize.toMegabytes())
         return IMPORT_EXPORT_VIEW
     }

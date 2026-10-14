@@ -41,6 +41,17 @@ object ContractsCsv {
     internal const val ERROR_COLUMN_MISSING = "contracts.import.error.columnMissing"
     internal const val ERROR_PERIOD = "contracts.import.error.period"
     internal const val ERROR_BOOLEAN = "contracts.import.error.boolean"
+    internal const val ERROR_UNCLOSED_QUOTE = "contracts.import.error.unclosedQuote"
+
+    /**
+     * Thrown by [parse], if the file ends within a quoted cell: the closing quote is missing, and the cell would
+     * otherwise silently take in all the following rows
+     *
+     * @property row the row, in which the unclosed quoted cell starts
+     * @property completeRows the rows before that row, which were read completely
+     */
+    internal class UnclosedQuoteException(val row: Int, val completeRows: List<List<String>>) :
+        IllegalArgumentException("Unclosed quote in row $row")
 
     /**
      * An invalid value in the imported file
@@ -98,7 +109,11 @@ object ContractsCsv {
     fun read(bytes: ByteArray, userId: String): ImportResult {
         // spreadsheet programs often add blank rows at the end
         val text = decode(bytes).removePrefix(BOM.toString())
-        val rows = nonBlankRows(parse(text, detectSeparator(text)))
+        val rows = try {
+            nonBlankRows(parse(text, detectSeparator(text)))
+        } catch (e: UnclosedQuoteException) {
+            return failure(ImportError(e.row, null, message(ERROR_UNCLOSED_QUOTE)))
+        }
         val (headerRow, header) = rows.firstOrNull() ?: return failure(ImportError(1, null, message(ERROR_EMPTY)))
         val columnIndex = header.withIndex().associate { it.value.trim() to it.index }
         val missing = REQUIRED_COLUMNS.filterNot { it in columnIndex }
@@ -227,12 +242,15 @@ object ContractsCsv {
      * quotes
      *
      * @param separator the separator of the cells, see [detectSeparator]
+     * @throws UnclosedQuoteException if the text ends within a quoted cell
      */
     internal fun parse(text: String, separator: Char = ','): List<List<String>> {
         val rows = mutableListOf<List<String>>()
         var row = mutableListOf<String>()
         val cell = StringBuilder()
         var quoted = false
+        // the row, in which the current quoted cell started
+        var quoteRow = 0
         var i = 0
         while (i < text.length) {
             val c = text[i]
@@ -242,7 +260,11 @@ object ContractsCsv {
                     i++
                 }
 
-                c == '"' && (quoted || cell.isEmpty()) -> quoted = !quoted
+                c == '"' && (quoted || cell.isEmpty()) -> {
+                    quoted = !quoted
+                    quoteRow = rows.size + 1
+                }
+
                 quoted -> cell.append(c)
                 c == separator -> {
                     row += cell.toString()
@@ -262,6 +284,10 @@ object ContractsCsv {
                 else -> cell.append(c)
             }
             i++
+        }
+        if (quoted) {
+            // within the quoted cell, line breaks don't end a row: all rows before it are complete
+            throw UnclosedQuoteException(quoteRow, rows)
         }
         if (cell.isNotEmpty() || row.isNotEmpty()) {
             row += cell.toString()
@@ -287,7 +313,14 @@ object ContractsCsv {
      */
     internal fun detectSeparator(text: String): Char {
         val headers = SEPARATORS.associateWith { separator ->
-            nonBlankRows(parse(text, separator)).firstOrNull()?.value.orEmpty().map { it.trim() }
+            // an unclosed quote is reported when reading the file with the detected separator. Whether a quote opens a
+            // quoted cell depends on the separator, so the header is still needed to detect it
+            val rows = try {
+                parse(text, separator)
+            } catch (e: UnclosedQuoteException) {
+                e.completeRows
+            }
+            nonBlankRows(rows).firstOrNull()?.value.orEmpty().map { it.trim() }
         }
         return headers.entries.firstOrNull { (_, header) -> header.containsAll(REQUIRED_COLUMNS) }?.key
             ?: headers.maxBy { (_, header) -> header.count { it in COLUMNS } }.key

@@ -120,6 +120,23 @@ class ContractsCsvTest {
         assertEquals(separator, ContractsCsv.detectSeparator(header ?: ""))
     }
 
+    @ParameterizedTest
+    @CsvSource(
+        delimiter = '|',
+        value = [
+            "'type,company\nRent,\"ACME\nGym,Other\n'|2", "'type,company\n\nRent,\"\"\"ACME\"\"\n'|3",
+            "'type,\"company\nRent,ACME'|1", "'type;company\nRent;\"A\"\"B\nGym;x'|2"
+        ]
+    )
+    fun `reports a quoted cell without closing quote in the row where it starts, instead of importing the rest into it`(
+        csv: String, row: Int
+    ) {
+        val result = read(csv)
+        assertTrue(result.contracts.isEmpty())
+        assertEquals(listOf(row to null), result.errors.map { it.row to it.column })
+        assertEquals(ContractsCsv.ERROR_UNCLOSED_QUOTE, result.errors.single().error.codes!!.first())
+    }
+
     @Test
     fun `reports missing required columns`() {
         val result = read("type,notes\r\nRent,\r\n")
