@@ -10,10 +10,16 @@ import de.j4velin.contracts.user.data.UsersRepository
 import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.matchesPattern
 import org.hamcrest.Matchers.not
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.ValueSource
+import org.mockito.ArgumentCaptor
+import org.mockito.ArgumentMatchers.any
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.BDDMockito.given
+import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.springframework.beans.factory.annotation.Autowired
@@ -57,6 +63,8 @@ class ContractsControllerTest {
     private fun testContract() =
         Contract(testUserId, "type", "company", bonus = Bonus(description = "bonus")).withId("c1")
 
+    private fun otherUsersContract() = Contract("user2", "type", "company").withId("c1")
+
     @ParameterizedTest
     @ValueSource(strings = ["delete", "toggleCancel", "toggleCancelAck", "toggleBonus"])
     fun `state changing actions are not reachable via GET`(action: String) {
@@ -80,6 +88,91 @@ class ContractsControllerTest {
             .andExpect(status().is3xxRedirection)
             .andExpect(redirectedUrl("/contracts"))
         verify(repository).deleteById("c1")
+    }
+
+    @Test
+    fun `contract of another user is not found`() {
+        given(repository.findById("c1")).willReturn(Optional.of(otherUsersContract()))
+        mockMvc.perform(get("/contracts/c1").with(user(testUser)))
+            .andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `contract of another user is not deleted`() {
+        given(repository.findById("c1")).willReturn(Optional.of(otherUsersContract()))
+        mockMvc.perform(post("/contracts/c1/delete").with(user(testUser)).with(csrf()))
+            .andExpect(status().isNotFound)
+        verify(repository, never()).deleteById(anyString())
+        verify(repository, never()).save(any(Contract::class.java))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["toggleCancel", "toggleCancelAck", "toggleBonus"])
+    fun `contract of another user is not toggled`(action: String) {
+        given(repository.findById("c1")).willReturn(Optional.of(otherUsersContract()))
+        mockMvc.perform(post("/contracts/c1/$action").with(user(testUser)).with(csrf()))
+            .andExpect(status().isNotFound)
+        verify(repository, never()).save(any(Contract::class.java))
+    }
+
+    @Test
+    fun `contract of another user is not updated`() {
+        given(repository.findById("c1")).willReturn(Optional.of(otherUsersContract()))
+        mockMvc.perform(
+            post("/contracts/c1").with(user(testUser)).with(csrf())
+                .param("type", "type").param("company", "company")
+        ).andExpect(status().isNotFound)
+        verify(repository, never()).save(any(Contract::class.java))
+    }
+
+    @Test
+    fun `adding a contract stores trimmed type and company`() {
+        mockMvc.perform(
+            post("/contracts").with(user(testUser)).with(csrf())
+                .param("type", "  Rent ").param("company", " ACME  ")
+        ).andExpect(status().is3xxRedirection)
+            .andExpect(redirectedUrl("/contracts"))
+        val captor = ArgumentCaptor.forClass(Contract::class.java)
+        verify(repository).save(captor.capture())
+        assertEquals("Rent", captor.value.type)
+        assertEquals("ACME", captor.value.company)
+        assertEquals(testUserId, captor.value.userId)
+    }
+
+    @ParameterizedTest
+    @CsvSource("'', company", "'   ', company", "type, ''", "type, '  '")
+    fun `adding a contract with blank type or company is rejected`(type: String, company: String) {
+        mockMvc.perform(
+            post("/contracts").with(user(testUser)).with(csrf())
+                .param("type", type).param("company", company)
+        ).andExpect(status().isBadRequest)
+        verify(repository, never()).save(any(Contract::class.java))
+    }
+
+    @Test
+    fun `updating a contract stores trimmed type and company`() {
+        given(repository.findById("c1")).willReturn(Optional.of(testContract()))
+        mockMvc.perform(
+            post("/contracts/c1").with(user(testUser)).with(csrf())
+                .param("type", " Rent").param("company", "ACME ")
+        ).andExpect(status().is3xxRedirection)
+            .andExpect(redirectedUrl("/contracts"))
+        val captor = ArgumentCaptor.forClass(Contract::class.java)
+        verify(repository).save(captor.capture())
+        assertEquals("c1", captor.value.id)
+        assertEquals("Rent", captor.value.type)
+        assertEquals("ACME", captor.value.company)
+    }
+
+    @ParameterizedTest
+    @CsvSource("'', company", "'   ', company", "type, ''", "type, '  '")
+    fun `updating a contract with blank type or company is rejected`(type: String, company: String) {
+        given(repository.findById("c1")).willReturn(Optional.of(testContract()))
+        mockMvc.perform(
+            post("/contracts/c1").with(user(testUser)).with(csrf())
+                .param("type", type).param("company", company)
+        ).andExpect(status().isBadRequest)
+        verify(repository, never()).save(any(Contract::class.java))
     }
 
     @Test
