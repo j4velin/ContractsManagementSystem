@@ -42,15 +42,29 @@ object ContractsCsv {
     internal const val ERROR_PERIOD = "contracts.import.error.period"
     internal const val ERROR_BOOLEAN = "contracts.import.error.boolean"
     internal const val ERROR_UNCLOSED_QUOTE = "contracts.import.error.unclosedQuote"
+    internal const val ERROR_TOO_MANY_CONTRACTS = "contracts.import.error.tooManyContracts"
+    internal const val ERROR_TOO_MANY_ERRORS = "contracts.import.error.tooManyErrors"
+
+    /**
+     * The most contracts a file may have. Far more than anybody has, and it keeps the memory, which an import needs,
+     * small: the upload limit alone would allow hundreds of thousands of short rows
+     */
+    internal const val MAX_CONTRACTS = 10_000
+
+    /**
+     * After this many errors, the import stops checking further rows: the user has to fix these first anyway, and
+     * the errors are shown on a page
+     */
+    internal const val MAX_ERRORS = 50
 
     /**
      * Thrown by [parse], if the file ends within a quoted cell: the closing quote is missing, and the cell would
      * otherwise silently take in all the following rows
      *
      * @property row the row, in which the unclosed quoted cell starts
-     * @property completeRows the rows before that row, which were read completely
+     * @property completeRows the rows before that row, which were read completely (see [readRows])
      */
-    internal class UnclosedQuoteException(val row: Int, val completeRows: List<List<String>>) :
+    internal class UnclosedQuoteException(val row: Int, val completeRows: List<IndexedValue<List<String>>>) :
         IllegalArgumentException("Unclosed quote in row $row")
 
     /**
@@ -97,7 +111,8 @@ object ContractsCsv {
 
     /**
      * Reads contracts from a CSV file. Checks all rows and reports every invalid value instead of stopping at the
-     * first one, so that the user can fix the whole file at once.
+     * first one, so that the user can fix the whole file at once, up to [MAX_ERRORS] errors. Files with more than
+     * [MAX_CONTRACTS] contracts are rejected.
      *
      * The file is read as UTF-8 or, if it isn't valid UTF-8, as Windows-1252 (the encoding in which Excel saves CSV
      * files on Windows). The cells may be separated by commas or, as Excel does in many European locales, semicolons.
@@ -107,12 +122,15 @@ object ContractsCsv {
      * @return the contracts, or the errors, if any row is invalid. The contracts have no id, so saving them adds them
      */
     fun read(bytes: ByteArray, userId: String): ImportResult {
-        // spreadsheet programs often add blank rows at the end
         val text = decode(bytes).removePrefix(BOM.toString())
+        // the header, the contracts and one more row, to notice that there are too many
         val rows = try {
-            nonBlankRows(parse(text, detectSeparator(text)))
+            readRows(text, detectSeparator(text), maxRows = MAX_CONTRACTS + 2)
         } catch (e: UnclosedQuoteException) {
             return failure(ImportError(e.row, null, message(ERROR_UNCLOSED_QUOTE)))
+        }
+        if (rows.size > MAX_CONTRACTS + 1) {
+            return failure(ImportError(rows.last().index, null, message(ERROR_TOO_MANY_CONTRACTS, MAX_CONTRACTS)))
         }
         val (headerRow, header) = rows.firstOrNull() ?: return failure(ImportError(1, null, message(ERROR_EMPTY)))
         val columnIndex = header.withIndex().associate { it.value.trim() to it.index }
@@ -123,7 +141,11 @@ object ContractsCsv {
 
         val contracts = mutableListOf<Contract>()
         val errors = mutableListOf<ImportError>()
-        rows.drop(1).forEach { (rowNumber, row) ->
+        for ((rowNumber, row) in rows.drop(1)) {
+            if (errors.size >= MAX_ERRORS) {
+                errors += ImportError(rowNumber, null, message(ERROR_TOO_MANY_ERRORS, MAX_ERRORS))
+                break
+            }
             val cell = { column: String -> columnIndex[column]?.let { row.getOrNull(it) }?.takeIf { it.isNotEmpty() } }
             val rowErrors = mutableListOf<ImportError>()
             val form = ContractForm().apply {
@@ -180,6 +202,9 @@ object ContractsCsv {
         val period = try {
             Period.parse(value.trim())
         } catch (e: DateTimeParseException) {
+            null
+        } catch (e: ArithmeticException) {
+            // valid syntax, but too large, like P2147483647W (the weeks are converted to days)
             null
         }
         val formValues = ContractForm.toFormValues(period)
@@ -239,18 +264,35 @@ object ContractsCsv {
 
     /**
      * Splits a CSV file into rows and cells (RFC 4180): quoted cells may contain separators, line breaks and doubled
-     * quotes
+     * quotes. Skips blank rows (spreadsheet programs often add some at the end), without keeping them in memory
      *
      * @param separator the separator of the cells, see [detectSeparator]
-     * @throws UnclosedQuoteException if the text ends within a quoted cell
+     * @param maxRows stops reading after this many rows, which aren't blank
+     * @return the rows, which aren't blank, each with its row number. The number counts blank rows as well, so that it
+     * is the row as a spreadsheet program shows it
+     * @throws UnclosedQuoteException if the text ends within a quoted cell (before [maxRows] rows are read)
      */
-    internal fun parse(text: String, separator: Char = ','): List<List<String>> {
-        val rows = mutableListOf<List<String>>()
+    internal fun readRows(text: String, separator: Char, maxRows: Int = Int.MAX_VALUE): List<IndexedValue<List<String>>> {
+        val rows = mutableListOf<IndexedValue<List<String>>>()
+        var rowNumber = 1
         var row = mutableListOf<String>()
         val cell = StringBuilder()
         var quoted = false
         // the row, in which the current quoted cell started
         var quoteRow = 0
+
+        // returns true, if enough rows are read
+        fun endRow(): Boolean {
+            row += cell.toString()
+            cell.clear()
+            if (row.any { it.isNotBlank() }) {
+                rows += IndexedValue(rowNumber, row)
+            }
+            row = mutableListOf()
+            rowNumber++
+            return rows.size >= maxRows
+        }
+
         var i = 0
         while (i < text.length) {
             val c = text[i]
@@ -262,7 +304,7 @@ object ContractsCsv {
 
                 c == '"' && (quoted || cell.isEmpty()) -> {
                     quoted = !quoted
-                    quoteRow = rows.size + 1
+                    quoteRow = rowNumber
                 }
 
                 quoted -> cell.append(c)
@@ -275,10 +317,9 @@ object ContractsCsv {
                     if (c == '\r' && text.getOrNull(i + 1) == '\n') {
                         i++
                     }
-                    row += cell.toString()
-                    cell.clear()
-                    rows += row
-                    row = mutableListOf()
+                    if (endRow()) {
+                        return rows
+                    }
                 }
 
                 else -> cell.append(c)
@@ -290,19 +331,10 @@ object ContractsCsv {
             throw UnclosedQuoteException(quoteRow, rows)
         }
         if (cell.isNotEmpty() || row.isNotEmpty()) {
-            row += cell.toString()
-            rows += row
+            endRow()
         }
         return rows
     }
-
-    /**
-     * @return the rows, which aren't blank, each with its row number (counted before skipping blank rows, so that the
-     * number is the row as a spreadsheet program shows it)
-     */
-    private fun nonBlankRows(rows: List<List<String>>): List<IndexedValue<List<String>>> =
-        rows.mapIndexed { index, row -> IndexedValue(index + 1, row) }
-            .filterNot { (_, row) -> row.all { it.isBlank() } }
 
     /**
      * Detects the separator by reading the header (the first row, which isn't blank) with each of them: column names
@@ -313,14 +345,14 @@ object ContractsCsv {
      */
     internal fun detectSeparator(text: String): Char {
         val headers = SEPARATORS.associateWith { separator ->
-            // an unclosed quote is reported when reading the file with the detected separator. Whether a quote opens a
-            // quoted cell depends on the separator, so the header is still needed to detect it
+            // only reads up to the header. An unclosed quote is reported when reading the file with the detected
+            // separator: whether a quote opens a quoted cell depends on the separator, so it may not concern the header
             val rows = try {
-                parse(text, separator)
+                readRows(text, separator, maxRows = 1)
             } catch (e: UnclosedQuoteException) {
                 e.completeRows
             }
-            nonBlankRows(rows).firstOrNull()?.value.orEmpty().map { it.trim() }
+            rows.firstOrNull()?.value.orEmpty().map { it.trim() }
         }
         return headers.entries.firstOrNull { (_, header) -> header.containsAll(REQUIRED_COLUMNS) }?.key
             ?: headers.maxBy { (_, header) -> header.count { it in COLUMNS } }.key

@@ -533,6 +533,14 @@ class ContractsControllerTest {
     }
 
     @Test
+    fun `import errors show row numbers without grouping, but the contract limit with it`() {
+        val csv = "type,company\r\n" + "Rent,ACME\r\n".repeat(ContractsCsv.MAX_CONTRACTS + 1)
+        mockMvc.perform(importRequest(csv))
+            .andExpect(flash().attribute("importErrors", listOf("Row 10002: The file has more than 10,000 contracts, please split it")))
+        verifyNoInteractions(repository)
+    }
+
+    @Test
     fun `invalid import changes nothing and shows the localized errors`() {
         given(repository.findByUserId(testUserId)).willReturn(listOf(testContract()))
         val errors = mockMvc.perform(importRequest("type,company\r\nRent,\r\n").param("replace", "true").param("locale", "de"))

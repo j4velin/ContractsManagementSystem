@@ -102,7 +102,7 @@ class ContractsCsvTest {
     )
     fun `separator is the one, with which the header has the required columns`(header: String) {
         assertEquals(';', ContractsCsv.detectSeparator(header))
-        val columns = ContractsCsv.parse(header, ';').last { row -> row.any { it.isNotBlank() } }
+        val columns = ContractsCsv.readRows(header, ';').single().value
         val row = columns.joinToString(";") { if (it == "type") "Rent" else if (it == "company") "ACME" else "" }
         val result = read(header + row + "\r\n")
         assertEquals(emptyList<ContractsCsv.ImportError>(), result.errors)
@@ -153,8 +153,49 @@ class ContractsCsvTest {
     @Test
     fun `parses quoted cells with separators, doubled quotes and line breaks`() {
         assertEquals(
-            listOf(listOf("a,b", "say \"hi\"", "x\r\ny", ""), listOf("last")),
-            ContractsCsv.parse("\"a,b\",\"say \"\"hi\"\"\",\"x\r\ny\",\"\"\nlast")
+            listOf(IndexedValue(1, listOf("a,b", "say \"hi\"", "x\r\ny", "")), IndexedValue(2, listOf("last"))),
+            ContractsCsv.readRows("\"a,b\",\"say \"\"hi\"\"\",\"x\r\ny\",\"\"\nlast", ',')
+        )
+    }
+
+    @Test
+    fun `skips blank rows, but counts them in the row numbers, and stops after the given number of rows`() {
+        val text = "a\r\n,,\r\n\r\nb\r\nc\r\n\"unclosed"
+        assertEquals(listOf(IndexedValue(1, listOf("a")), IndexedValue(4, listOf("b"))), ContractsCsv.readRows(text, ',', 2))
+    }
+
+    @Test
+    fun `imports up to the maximum number of contracts, ignoring blank rows`() {
+        val csv = "type,company\r\n" + "Rent,ACME\r\n\r\n".repeat(ContractsCsv.MAX_CONTRACTS)
+        assertEquals(ContractsCsv.MAX_CONTRACTS, read(csv).contracts.size)
+    }
+
+    @Test
+    fun `rejects a file with more than the maximum number of contracts, without reading the rest of it`() {
+        // the unclosed quote at the end isn't reached anymore
+        val csv = "type,company\r\n" + "Rent,ACME\r\n".repeat(ContractsCsv.MAX_CONTRACTS + 1) + "\"unclosed"
+        val result = read(csv)
+        assertTrue(result.contracts.isEmpty())
+        assertEquals(listOf(ContractsCsv.MAX_CONTRACTS + 2 to null), result.errors.map { it.row to it.column })
+        assertEquals(ContractsCsv.ERROR_TOO_MANY_CONTRACTS, result.errors.single().error.codes!!.first())
+    }
+
+    @Test
+    fun `stops checking after the maximum number of errors and says so in the next row`() {
+        val csv = "type,company\r\n" + "x,\r\n".repeat(ContractsCsv.MAX_ERRORS * 3)
+        val errors = read(csv).errors
+        assertEquals(ContractsCsv.MAX_ERRORS + 1, errors.size)
+        assertEquals((2..ContractsCsv.MAX_ERRORS + 1).map { it to "company" }, errors.dropLast(1).map { it.row to it.column })
+        assertEquals(ContractsCsv.MAX_ERRORS + 2 to null, errors.last().row to errors.last().column)
+        assertEquals(ContractsCsv.ERROR_TOO_MANY_ERRORS, errors.last().error.codes!!.first())
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["P2147483647W", "P-2147483648W", "P99999999999D"])
+    fun `periods, which are too large, are invalid periods`(period: String) {
+        assertEquals(
+            listOf(2 to "noticePeriod"),
+            read("type,company,noticePeriod\r\nRent,ACME,$period\r\n").errors.map { it.row to it.column }
         )
     }
 }

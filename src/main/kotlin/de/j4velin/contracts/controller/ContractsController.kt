@@ -130,10 +130,12 @@ class ContractsController(
             val locale = LocaleContextHolder.getLocale()
             redirectAttributes.addFlashAttribute(IMPORT_ERRORS, result.errors.map {
                 val error = messageSource.getMessage(it.error, locale)
+                // as text: a number would be formatted with grouping, like "Row 10,002"
+                val row = it.row.toString()
                 if (it.column == null) {
-                    messageSource.getMessage("contracts.import.error.row", arrayOf<Any>(it.row, error), locale)
+                    messageSource.getMessage("contracts.import.error.row", arrayOf<Any>(row, error), locale)
                 } else {
-                    messageSource.getMessage("contracts.import.error.cell", arrayOf<Any>(it.row, it.column, error), locale)
+                    messageSource.getMessage("contracts.import.error.cell", arrayOf<Any>(row, it.column, error), locale)
                 }
             })
             return "redirect:/import-export"
