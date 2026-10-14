@@ -115,6 +115,28 @@ page="$(contracts_page bob)"
 [[ "$page" != *"$COMPANY"* ]] || fail "bob can see alice's contract"
 pass "users only see their own contracts"
 
+# --- alice's export can be imported by bob, replacing his contracts on a second import
+client alice "$BASE_URL/contracts/export" --fail --output "$WORK_DIR/export.csv" || fail "export failed"
+grep -q "$COMPANY" "$WORK_DIR/export.csv" || fail "export doesn't contain alice's contract"
+pass "export contracts as CSV"
+
+import_csv() {
+    local browser="$1"
+    shift
+    local token
+    token="$(csrf_token "$browser" /contracts)"
+    status_and_location "$browser" "$BASE_URL/contracts/import" \
+        --form "_csrf=$token" --form "file=@$WORK_DIR/export.csv;type=text/csv" "$@"
+}
+result="$(import_csv bob)"
+[[ "$result" == 302\ */contracts ]] || fail "import failed: $result"
+page="$(contracts_page bob)"
+[[ "$page" == *"1 contract(s) imported"* && "$page" == *"$COMPANY"* ]] || fail "imported contract not listed"
+result="$(import_csv bob --form "replace=true")"
+[[ "$result" == 302\ */contracts ]] || fail "import with replace failed: $result"
+[ "$(contracts_page bob | grep -c "<td>$COMPANY</td>")" = "1" ] || fail "import with replace kept the old contracts"
+pass "import contracts from CSV, also replacing the existing ones"
+
 # --- registering an existing username is rejected
 [[ "$(register carol "alice$RUN_ID")" == *"User already exists"* ]] || fail "duplicate username not rejected"
 pass "duplicate username rejected"
