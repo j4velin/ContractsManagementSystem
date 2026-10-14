@@ -79,12 +79,33 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    # one publish at a time, so two releases pushed shortly after each other can't overwrite each other's tags
+    concurrency:
+      group: publish-image
+      cancel-in-progress: false
+
     permissions:
       contents: read
       packages: write
 
     steps:
     - uses: actions/checkout@v7
+      with:
+        # all tags, to find out whether this is the newest release
+        fetch-depth: 0
+
+    # Only the newest release may move "latest": e.g. v1.0.1 released after v1.1.0 must not make servers pulling
+    # "latest" go back to the older code. Pre-releases like v2.0.0-rc1 never become "latest"
+    - name: Check whether this is the newest release
+      id: release
+      run: |
+        newest=$(git tag --list 'v*' | grep -E '^v[0-9]+(\.[0-9]+)*$' | sort -V | tail -n 1)
+        echo "newest release: $newest, this one: $GITHUB_REF_NAME"
+        if [ "$newest" = "$GITHUB_REF_NAME" ]; then
+          echo "latest=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "latest=false" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
@@ -101,11 +122,13 @@ jobs:
       uses: docker/metadata-action@v6
       with:
         images: ghcr.io/j4velin/contractsmanagementsystem
-        # v1.2.0 is published as 1.2.0, 1.2 and latest
+        # v1.2.0 is published as 1.2.0 and 1.2, and also as latest if it's the newest release
         tags: |
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
-          type=raw,value=latest
+          type=raw,value=latest,enable=${{ steps.release.outputs.latest }}
+        flavor: |
+          latest=false
 
     - name: Build and push
       uses: docker/build-push-action@v7
