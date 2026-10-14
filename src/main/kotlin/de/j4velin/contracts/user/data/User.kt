@@ -5,7 +5,6 @@ import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.userdetails.UserDetails
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 
 @Document
 data class User(
@@ -37,13 +36,19 @@ data class User(
     /**
      * Constructs an [User] from an [UserDTO]
      * @param data the DTO data
+     * @param encodedPassword the password of [data], already encoded with the application's password encoder
      */
-    constructor(data: UserDTO) : this(
+    constructor(data: UserDTO, encodedPassword: String) : this(
         username = data.username,
-        // encode() is declared nullable, but only returns null for a null password
-        password = checkNotNull(BCryptPasswordEncoder().encode(data.password)),
+        password = encodedPassword,
         mail = data.mail
     )
+
+    /**
+     * Omits the password hash, as this user is also the Spring Security principal, which ends up in log messages
+     */
+    override fun toString() =
+        "User(id=$id, username=$username, password=[PROTECTED], mail=$mail, role=$role, locale=$locale)"
 }
 
 enum class UserRole {
