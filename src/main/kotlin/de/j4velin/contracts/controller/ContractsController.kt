@@ -1,22 +1,41 @@
 package de.j4velin.contracts.controller
 
 import de.j4velin.contracts.data.Contract
-import de.j4velin.contracts.data.ContractDTO
 import de.j4velin.contracts.data.ContractsRepository
 import de.j4velin.contracts.user.data.User
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
+import org.springframework.validation.BindingResult
+import org.springframework.web.bind.WebDataBinder
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.InitBinder
+import org.springframework.web.bind.annotation.ModelAttribute
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.server.ResponseStatusException
+import org.springframework.web.servlet.ModelAndView
+import java.beans.PropertyEditorSupport
 import java.time.Clock
 import java.time.LocalDate
 
 @Controller
 class ContractsController(private val repository: ContractsRepository, private val clock: Clock) {
+
+    /**
+     * A submitted checkbox counts as checked, whatever its value. An unchecked one isn't submitted at all, or only as
+     * Spring's `_<field>` marker, which sets false. Without this, a value other than true/false/on/off/yes/no/1/0
+     * (like the empty value the form used to send) would be a binding error
+     */
+    @InitBinder(FORM)
+    fun initFormBinder(binder: WebDataBinder) {
+        binder.registerCustomEditor(Boolean::class.javaPrimitiveType!!, object : PropertyEditorSupport() {
+            override fun setAsText(text: String?) {
+                value = true
+            }
+        })
+    }
 
     @GetMapping("/contracts")
     fun getContracts(model: Model, @AuthenticationPrincipal user: User): String {
@@ -29,25 +48,33 @@ class ContractsController(private val repository: ContractsRepository, private v
 
     @GetMapping("/contracts/{id}")
     fun getContract(@PathVariable id: String, model: Model, @AuthenticationPrincipal user: User): String {
-        model.addAttribute("contract", getOwnContract(id, user))
-        return "contract"
+        model.addAttribute(FORM, ContractForm.from(getOwnContract(id, user)))
+        model.addAttribute(CONTRACT_ID, id)
+        return VIEW
     }
 
     @GetMapping("/contracts/add")
-    fun getAddContracts(model: Model) = "contract"
+    fun getAddContracts(model: Model): String {
+        model.addAttribute(FORM, ContractForm())
+        return VIEW
+    }
 
     @PostMapping("/contracts")
-    fun addContract(contractDto: ContractDTO, @AuthenticationPrincipal user: User): String {
-        val contract = Contract(validate(contractDto), user.requireId())
+    fun addContract(
+        @ModelAttribute(FORM) form: ContractForm,
+        errors: BindingResult,
+        @AuthenticationPrincipal user: User
+    ): ModelAndView {
+        val contract = form.toContract(user.requireId(), null, errors) ?: return invalidForm(null)
         repository.save(contract)
-        return "redirect:/contracts"
+        return ModelAndView(REDIRECT_TO_LIST)
     }
 
     @PostMapping("/contracts/{id}/delete")
     fun deleteContract(@PathVariable id: String, @AuthenticationPrincipal user: User): String {
         getOwnContract(id, user)
         repository.deleteById(id)
-        return "redirect:/contracts"
+        return REDIRECT_TO_LIST
     }
 
     @PostMapping("/contracts/{id}/toggleCancel")
@@ -65,9 +92,16 @@ class ContractsController(private val repository: ContractsRepository, private v
     @PostMapping("/contracts/{id}")
     fun updateContract(
         @PathVariable id: String,
-        contractDto: ContractDTO,
+        @ModelAttribute(FORM) form: ContractForm,
+        errors: BindingResult,
         @AuthenticationPrincipal user: User
-    ) = updateOwnContract(id, user) { Contract(validate(contractDto), user.requireId(), id) }
+    ): ModelAndView {
+        // other users' contracts are not found, whether the input is valid or not
+        getOwnContract(id, user)
+        val contract = form.toContract(user.requireId(), id, errors) ?: return invalidForm(id)
+        repository.save(contract)
+        return ModelAndView(REDIRECT_TO_LIST)
+    }
 
     /**
      * @return the current date of the injected [Clock]
@@ -99,27 +133,33 @@ class ContractsController(private val repository: ContractsRepository, private v
      */
     private fun updateOwnContract(id: String, user: User, change: (Contract) -> Contract): String {
         repository.save(change(getOwnContract(id, user)))
-        return "redirect:/contracts"
+        return REDIRECT_TO_LIST
     }
 
     /**
-     * Validates the required fields of a submitted contract
+     * Shows the submitted form again. The model already holds the form with the entered values and its errors
      *
-     * @param contractDto the submitted contract
-     * @return a copy of the DTO with trimmed type and company
-     * @throws ResponseStatusException with [HttpStatus.BAD_REQUEST], if the type or the company is blank
+     * @param id the id of the edited contract, or null when adding a contract
+     * @return the contract page with status [HttpStatus.BAD_REQUEST]
      */
-    private fun validate(contractDto: ContractDTO) = contractDto.copy(
-        type = requireNotBlank(contractDto.type, "type"),
-        company = requireNotBlank(contractDto.company, "company")
-    )
+    private fun invalidForm(id: String?) = ModelAndView(VIEW, HttpStatus.BAD_REQUEST).apply {
+        if (id != null) {
+            addObject(CONTRACT_ID, id)
+        }
+    }
 
-    /**
-     * @param value the raw form value
-     * @param field the name of the form field, used in the error message
-     * @return the trimmed value
-     * @throws ResponseStatusException with [HttpStatus.BAD_REQUEST], if the value is blank
-     */
-    private fun requireNotBlank(value: String, field: String) =
-        value.trim().ifEmpty { throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing $field") }
+    private companion object {
+        const val VIEW = "contract"
+        const val REDIRECT_TO_LIST = "redirect:/contracts"
+
+        /**
+         * The model attribute of the [ContractForm]
+         */
+        const val FORM = "contractForm"
+
+        /**
+         * The model attribute of the edited contract's id. Not set when adding a contract
+         */
+        const val CONTRACT_ID = "contractId"
+    }
 }

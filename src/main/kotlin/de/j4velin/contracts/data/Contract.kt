@@ -1,7 +1,6 @@
 package de.j4velin.contracts.data
 
 import de.j4velin.contracts.localized
-import de.j4velin.contracts.parseDate
 import org.springframework.data.annotation.Id
 import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
@@ -35,23 +34,6 @@ data class Contract internal constructor(
     val bonus: Bonus = Bonus(),
     @Id val id: String? = null
 ) {
-
-    /**
-     * Constructs a [Contract] from a [ContractDTO]
-     * @param data the DTO data
-     * @param userId the userId of this contract's owner
-     * @param id the id of the contract, if the DTO updates an existing contract. Null for a new contract
-     */
-    constructor(data: ContractDTO, userId: String, id: String? = null) : this(
-        userId,
-        type = data.type,
-        company = data.company,
-        notes = data.notes,
-        startDate = parseDate(data.startDate, "startDate"),
-        cancellation = Cancellation.fromDTO(data),
-        bonus = Bonus.fromDTO(data),
-        id = id
-    )
 
     /**
      * @param today the current date
@@ -130,20 +112,3 @@ data class Contract internal constructor(
     }
 }
 
-data class ContractDTO(
-    val type: String,
-    val company: String,
-    val notes: String? = null,
-    val startDate: String? = null,
-    val endDate: String? = null,
-    val bonusDescription: String? = null,
-    val bonusReceived: String? = null,
-    val minDurationValue: String? = null,
-    val minDurationUnit: Char? = null,
-    val noticePeriodValue: String? = null,
-    val noticePeriodUnit: Char? = null,
-    val extendPeriodValue: String? = null,
-    val extendPeriodUnit: Char? = null,
-    val canceled: String? = null,
-    val cancelAck: String? = null
-)
