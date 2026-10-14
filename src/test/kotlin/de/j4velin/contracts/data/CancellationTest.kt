@@ -281,8 +281,7 @@ class CancellationTest {
         // first term ends 2025-01-31, then monthly: 2025-02-28, 2025-03-31, 2025-04-30, 2025-05-31, ...
         val march = LocalDate.of(2025, 3, 30)
         assertEquals(LocalDate.of(2025, 4, 30), cancelInfo.getNextPossibleEndDate(startDate, march))
-        // Mar 31 + 1 month = Apr 30, so notice can still be given on Mar 31 (not just until Apr 30 - 1 month = Mar 30)
-        assertEquals(LocalDate.of(2025, 3, 31), cancelInfo.getLatestPossibleCancelDate(startDate, march))
+        assertEquals(LocalDate.of(2025, 3, 30), cancelInfo.getLatestPossibleCancelDate(startDate, march))
         val april = LocalDate.of(2025, 4, 1)
         assertEquals(LocalDate.of(2025, 5, 31), cancelInfo.getNextPossibleEndDate(startDate, april))
         assertEquals(LocalDate.of(2025, 4, 30), cancelInfo.getLatestPossibleCancelDate(startDate, april))
@@ -406,37 +405,55 @@ class CancellationTest {
     }
 
     @Test
-    fun `cancel-by date is today when the notice period ends exactly at a month end`() {
-        // Mar 31 + 1 month = Apr 30. Apr 30 - 1 month would be Mar 30, i.e. yesterday
-        val now = LocalDate.of(2026, 3, 31)
-        val cancelInfo = Cancellation(noticePeriod = Period.ofMonths(1))
-        assertEquals(LocalDate.of(2026, 4, 30), cancelInfo.getNextPossibleEndDate(null, now))
-        assertEquals(now, cancelInfo.getLatestPossibleCancelDate(null, now))
+    fun `cancel-by date is the end date minus the notice period`() {
+        // contract ends on Feb 28, 2027 (yearly term): notice must be given by Jan 28, even though Jan 31 + 1 month
+        // would also be Feb 28 - deadlines are read cautiously
+        val cancelInfo = Cancellation(minDuration = Period.ofYears(1), noticePeriod = Period.ofMonths(1))
+        val start = LocalDate.of(2026, 2, 28)
+        val now = LocalDate.of(2027, 1, 10)
+        assertEquals(LocalDate.of(2027, 2, 28), cancelInfo.getNextPossibleEndDate(start, now))
+        assertEquals(LocalDate.of(2027, 1, 28), cancelInfo.getLatestPossibleCancelDate(start, now))
     }
 
     @Test
-    fun `cancel-by date is the last day from which the notice period ends in time`() {
-        // monthly terms from Jan 31: the term ending Apr 30 can still be cancelled on Mar 31 with 1 month notice
+    fun `term end is missed once its cancel-by date has passed`() {
+        val cancelInfo = Cancellation(minDuration = Period.ofYears(1), noticePeriod = Period.ofMonths(1))
+        val start = LocalDate.of(2026, 2, 28)
+        // Jan 28 was the last day for Feb 28, 2027 -> on Jan 29 the next term (Feb 28, 2028) is the earliest end
+        val now = LocalDate.of(2027, 1, 29)
+        assertEquals(LocalDate.of(2028, 2, 28), cancelInfo.getNextPossibleEndDate(start, now))
+        assertEquals(LocalDate.of(2028, 1, 28), cancelInfo.getLatestPossibleCancelDate(start, now))
+    }
+
+    @Test
+    fun `cancel-by date is never yesterday at the end of a month`() {
+        val cancelInfo = Cancellation(noticePeriod = Period.ofMonths(1))
+        // Mar 31 + 1 month is Apr 30, but Apr 30 - 1 month is Mar 30 (yesterday): Apr 30 can't be reached anymore,
+        // the earliest end is May 1, to be canceled by Apr 1
+        val now = LocalDate.of(2026, 3, 31)
+        assertEquals(LocalDate.of(2026, 5, 1), cancelInfo.getNextPossibleEndDate(null, now))
+        assertEquals(LocalDate.of(2026, 4, 1), cancelInfo.getLatestPossibleCancelDate(null, now))
+        // one day earlier, Apr 30 can still be reached by canceling today
+        val dayBefore = LocalDate.of(2026, 3, 30)
+        assertEquals(LocalDate.of(2026, 4, 30), cancelInfo.getNextPossibleEndDate(null, dayBefore))
+        assertEquals(dayBefore, cancelInfo.getLatestPossibleCancelDate(null, dayBefore))
+    }
+
+    @Test
+    fun `monthly term ending Apr 30 is missed on Mar 31`() {
+        // monthly terms from Jan 31: Apr 30 needs notice by Mar 30, so on Mar 31 the next term (May 31) is the earliest
         val cancelInfo = Cancellation(
             minDuration = Period.ofMonths(1), extendPeriod = Period.ofMonths(1), noticePeriod = Period.ofMonths(1)
         )
         val start = LocalDate.of(2024, 1, 31)
-        val now = LocalDate.of(2026, 3, 15)
-        assertEquals(LocalDate.of(2026, 4, 30), cancelInfo.getNextPossibleEndDate(start, now))
-        assertEquals(LocalDate.of(2026, 3, 31), cancelInfo.getLatestPossibleCancelDate(start, now))
+        assertEquals(LocalDate.of(2026, 3, 30), cancelInfo.getLatestPossibleCancelDate(start, LocalDate.of(2026, 3, 15)))
+        val now = LocalDate.of(2026, 3, 31)
+        assertEquals(LocalDate.of(2026, 5, 31), cancelInfo.getNextPossibleEndDate(start, now))
+        assertEquals(LocalDate.of(2026, 4, 30), cancelInfo.getLatestPossibleCancelDate(start, now))
     }
 
     @Test
-    fun `cancel-by date on a leap day with a yearly notice period`() {
-        // Feb 29, 2024 + 1 year = Feb 28, 2025, so notice can still be given on Feb 29
-        val now = LocalDate.of(2024, 2, 29)
-        val cancelInfo = Cancellation(noticePeriod = Period.ofYears(1))
-        assertEquals(LocalDate.of(2025, 2, 28), cancelInfo.getNextPossibleEndDate(null, now))
-        assertEquals(now, cancelInfo.getLatestPossibleCancelDate(null, now))
-    }
-
-    @Test
-    fun `cancel-by date is never in the past and is the latest day that is still in time`() {
+    fun `cancel-by date is never in the past and leaves the full notice period`() {
         val notices = listOf(
             Period.ofDays(10), Period.ofWeeks(2), Period.ofMonths(1), Period.ofMonths(2), Period.ofMonths(3),
             Period.ofYears(1)
@@ -452,8 +469,11 @@ class CancellationTest {
                     val cancelBy = cancelInfo.getLatestPossibleCancelDate(start, day)!!
                     val case = "today=$day notice=$notice start=$start end=$end cancelBy=$cancelBy"
                     assertFalse(cancelBy.isBefore(day), "cancel-by date in the past: $case")
-                    assertFalse(cancelBy.plus(notice).isAfter(end), "cancelling on the cancel-by date is too late: $case")
-                    assertTrue(cancelBy.plusDays(1).plus(notice).isAfter(end), "cancel-by date is not the latest: $case")
+                    assertEquals(end.minus(notice), cancelBy, "cancel-by date doesn't leave the full notice period: $case")
+                    if (start == null) {
+                        // no terms: the contract can end on any day, so one day earlier must not be reachable anymore
+                        assertTrue(end.minusDays(1).minus(notice).isBefore(day), "a day earlier would be possible: $case")
+                    }
                 }
             }
             day = day.plusDays(1)

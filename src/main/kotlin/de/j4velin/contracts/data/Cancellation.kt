@@ -155,12 +155,35 @@ data class Cancellation(
         }
         var possibleEnd = now
         if (noticePeriod != null) {
-            possibleEnd = possibleEnd.plus(noticePeriod)
+            possibleEnd = getEarliestEndWithNotice(noticePeriod, now)
         }
         if (startDate != null && minDuration != null) {
             possibleEnd = getFirstTermEndNotBefore(startDate, minDuration, extendPeriod ?: minDuration, possibleEnd)
         }
         return possibleEnd
+    }
+
+    /**
+     * Finds the earliest date at which the contract can end, if it is canceled today with the given notice period.
+     *
+     * Deadlines are read cautiously: an end date can only be reached if "end date minus notice period" is not before
+     * today, which is also the cancel-by date shown for it. Subtracting months isn't the inverse of adding them, so
+     * this can be later than today plus the notice period: on Mar 31 with one month notice, Apr 30 can't be reached
+     * (Apr 30 minus one month is Mar 30, yesterday), so the earliest end is May 1, to be canceled by Apr 1.
+     *
+     * Every later date can be reached as well, as "date minus notice period" never decreases for a later date.
+     *
+     * @param notice the notice period
+     * @param now LocalDate.now()
+     * @return the earliest reachable end date
+     */
+    private fun getEarliestEndWithNotice(notice: Period, now: LocalDate): LocalDate {
+        // today plus the notice period is never too early; month lengths differ by at most 3 days, so at most 3 steps
+        var end = now.plus(notice)
+        while (end.minus(notice).isBefore(now)) {
+            end = end.plusDays(1)
+        }
+        return end
     }
 
     /**
@@ -235,14 +258,8 @@ data class Cancellation(
         if (endDate != null || noticePeriod == null) {
             return null
         }
-        val end = getNextPossibleEndDate(startDate, now) ?: return null
-        // Subtracting months isn't the inverse of adding them: Apr 30 minus 1 month is Mar 30, but notice given on
-        // Mar 31 also ends on Apr 30 (Mar 31 + 1 month is clamped to Apr 30). So find the latest day from which the
-        // notice period still ends in time. Month lengths differ by at most 3 days, so this takes at most 3 steps.
-        var latest = end.minus(noticePeriod)
-        while (!latest.plusDays(1).plus(noticePeriod).isAfter(end)) {
-            latest = latest.plusDays(1)
-        }
-        return latest
+        // cautious reading: the full notice period before the end date. getNextPossibleEndDate only returns end dates,
+        // for which this isn't in the past
+        return getNextPossibleEndDate(startDate, now)?.minus(noticePeriod)
     }
 }
