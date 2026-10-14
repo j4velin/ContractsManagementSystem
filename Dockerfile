@@ -8,9 +8,11 @@ COPY gradle gradle
 RUN ./gradlew --no-daemon dependencies > /dev/null
 
 COPY src src
+# The version shown in the app: CI passes the release tag. Builds from a checkout show "dev" (.git isn't copied)
+ARG APP_VERSION=dev
 # Tests run in CI; the image build only packages the app.
 # Spring Boot also builds a "-plain" jar without dependencies, which is skipped here.
-RUN ./gradlew --no-daemon bootJar -x test \
+RUN ./gradlew --no-daemon bootJar -x test -PappVersion="$APP_VERSION" \
     && find build/libs -name '*.jar' ! -name '*-plain.jar' -exec cp {} app.jar \;
 
 # Runtime stage: only the JRE and the app

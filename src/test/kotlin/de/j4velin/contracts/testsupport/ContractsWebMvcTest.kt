@@ -1,5 +1,6 @@
 package de.j4velin.contracts.testsupport
 
+import de.j4velin.contracts.config.AppInfo
 import de.j4velin.contracts.config.WebSecurityConfig
 import de.j4velin.contracts.user.data.UsersRepository
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
@@ -13,8 +14,8 @@ import kotlin.reflect.KClass
  * The common setup of all `@WebMvcTest`s of this application. Use it instead of a plain [WebMvcTest].
  *
  * It exists because a plain [WebMvcTest] doesn't pick up our `SecurityFilterChain` and then silently tests against
- * Spring Boot's default security instead. This annotation therefore imports the real [WebSecurityConfig] and mocks the
- * beans that are always needed in the web layer:
+ * Spring Boot's default security instead. This annotation therefore imports the real [WebSecurityConfig] and [AppInfo]
+ * (shown in the footer of every page) and mocks the beans that are always needed in the web layer:
  * - [UserDetailsService], required by [WebSecurityConfig] (remember-me)
  * - [UsersRepository], required by `UserLocaleResolver`
  *
@@ -24,7 +25,7 @@ import kotlin.reflect.KClass
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.RUNTIME)
 @WebMvcTest
-@Import(WebSecurityConfig::class)
+@Import(WebSecurityConfig::class, AppInfo::class)
 @MockitoBean(types = [UserDetailsService::class, UsersRepository::class])
 annotation class ContractsWebMvcTest(
     /**
