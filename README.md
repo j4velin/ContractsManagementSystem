@@ -21,6 +21,10 @@ the smoke test passed for it:
 ```bash
 git tag 1.2.0 && git push origin 1.2.0
 ```
+The tag is also the version shown in the footer of the app, so there is no version number to update by hand. Builds
+without a release tag show the output of `git describe` (e.g. `1.2.0-3-gabc1234`), or `dev` for images built from a
+checkout.
+
 To build the image from the checkout instead, e.g. for local changes, use `docker compose up -d --build`.
 
 The app is then available at http://localhost:8080 (change the port with `APP_PORT` in `.env`). Behind a reverse

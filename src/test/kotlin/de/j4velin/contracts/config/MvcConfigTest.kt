@@ -3,6 +3,7 @@ package de.j4velin.contracts.config
 import de.j4velin.contracts.data.ContractsRepository
 import de.j4velin.contracts.testsupport.ContractsWebMvcTest
 import org.hamcrest.Matchers.containsString
+import org.hamcrest.Matchers.matchesPattern
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -53,6 +54,20 @@ class MvcConfigTest {
         mockMvc.perform(get("/").param("locale", "!!").session(session))
             .andExpect(status().isOk)
             .andExpect(content().string(containsString(germanPromo)))
+    }
+
+    @Autowired
+    private lateinit var appInfo: AppInfo
+
+    @ParameterizedTest
+    @ValueSource(strings = ["/", "/login", "/register", "/about"])
+    fun `pages show the running version and a link to the GitHub repository in the footer`(page: String) {
+        mockMvc.perform(get(page))
+            .andExpect(status().isOk)
+            .andExpect(content().string(matchesPattern(
+                "(?s).*<footer[^>]*>\\s*<span>Version ${Regex.escape(appInfo.version)}</span>.*" +
+                        "<a href=\"https://github.com/j4velin/ContractsManagementSystem\".*</footer>.*"
+            )))
     }
 
     @ParameterizedTest

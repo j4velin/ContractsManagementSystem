@@ -1,5 +1,11 @@
 <div class="container" xmlns:th="http://www.thymeleaf.org" th:fragment="footer" style="position: fixed; bottom: 0px;">
-    <footer>
+    <!--/* same background as the page, so that scrolled content doesn't show through */-->
+    <footer class="text-center small text-muted py-2" style="background-color: #f5f5f5;" th:with="appInfo=${@appInfo}">
+        <span th:text="#{footer.version(${appInfo.version})}">Version dev</span>
+        &middot;
+        <a th:href="${appInfo.repositoryUrl}" class="link-secondary text-decoration-none" target="_blank" rel="noopener">
+            <i class="bi bi-github"></i> GitHub
+        </a>
     </footer>
     <!-- the bundle includes Popper, which Bootstrap needs for tooltips -->
     <script th:src="@{/webjars/bootstrap/js/bootstrap.bundle.min.js}"></script>

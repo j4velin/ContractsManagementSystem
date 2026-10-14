@@ -10,7 +10,20 @@ plugins {
 }
 
 group = "de.j4velin"
-version = "0.0.1-SNAPSHOT"
+/**
+ * The version is never set by hand, it comes from the git tag of the release:
+ * - CI builds the release image with `-PappVersion=<tag>` (see the Dockerfile and the publish job)
+ * - otherwise `git describe`, e.g. "1.2.0" on a tagged commit or "1.2.0-3-gabc1234" three commits later
+ * - "dev", if neither is available (like in a Docker build from a checkout, which excludes .git)
+ */
+version = (providers.gradleProperty("appVersion").orNull?.trim()?.takeIf { it.isNotEmpty() }
+    ?: runCatching {
+        providers.exec {
+            commandLine("git", "describe", "--tags", "--always", "--dirty", "--match", "[0-9]*", "--match", "v[0-9]*")
+            isIgnoreExitValue = true
+        }.standardOutput.asText.get().trim()
+    }.getOrNull()?.takeIf { it.isNotEmpty() }
+    ?: "dev").removePrefix("v")
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -45,6 +58,14 @@ kotlin {
     compilerOptions {
         freeCompilerArgs.add("-Xjsr305=strict")
         jvmTarget.set(JvmTarget.JVM_21)
+    }
+}
+
+// META-INF/build-info.properties with the version, read by the app (BuildProperties) to show it in the footer. Without
+// the build time, so that the file only changes with the version
+springBoot {
+    buildInfo {
+        excludes.set(setOf("time"))
     }
 }
 
