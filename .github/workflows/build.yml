@@ -10,6 +10,8 @@ name: Java CI with Gradle
 on:
   push:
     branches: [ "main" ]
+    # version tags like v1.2.0 publish a Docker image, see the publish job
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
 
@@ -68,11 +70,11 @@ jobs:
       if: always()
       run: docker compose down --volumes
 
-  # Publishes the Docker image to the GitHub Container Registry, after the tests and the smoke test passed on main.
-  # Servers then only pull the finished image instead of building it themselves
+  # Publishes the Docker image to the GitHub Container Registry for version tags (e.g. v1.2.0), after the tests and
+  # the smoke test passed for the tagged commit. Servers then only pull the finished image instead of building it
   publish:
 
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [ build, docker ]
 
     runs-on: ubuntu-latest
@@ -99,9 +101,11 @@ jobs:
       uses: docker/metadata-action@v6
       with:
         images: ghcr.io/j4velin/contractsmanagementsystem
+        # v1.2.0 is published as 1.2.0, 1.2 and latest
         tags: |
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
           type=raw,value=latest
-          type=sha
 
     - name: Build and push
       uses: docker/build-push-action@v7

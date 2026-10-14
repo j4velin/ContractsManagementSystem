@@ -5,16 +5,22 @@ Spring Boot webapp to manage contracs, subscriptions etc.
 
 ## Run with Docker
 
-Starts the app together with a MongoDB database (data is kept in the `mongo-data` volume). For every change on
-`main`, CI publishes a ready-built image to `ghcr.io/j4velin/contractsmanagementsystem`, so a server only needs to
-download it:
+Starts the app together with a MongoDB database (data is kept in the `mongo-data` volume). For every version tag
+(e.g. `v1.2.0`), CI publishes a ready-built image to `ghcr.io/j4velin/contractsmanagementsystem`, so a server only
+needs to download it:
 
 ```bash
 cp .env.example .env   # then set REMEMBER_ME_KEY, e.g. to the output of: openssl rand -hex 32
 docker compose pull && docker compose up -d
 ```
 
-The same two commands (after a `git pull`, which keeps the compose file up to date) update to the latest version.
+The same two commands (after a `git pull`, which keeps the compose file up to date) update to the latest released
+version. To release a version, tag a commit on `main` and push the tag; the image is published once the tests and
+the smoke test passed for it:
+
+```bash
+git tag v1.2.0 && git push origin v1.2.0
+```
 To build the image from the checkout instead, e.g. for local changes, use `docker compose up -d --build`.
 
 The app is then available at http://localhost:8080 (change the port with `APP_PORT` in `.env`). Behind a reverse

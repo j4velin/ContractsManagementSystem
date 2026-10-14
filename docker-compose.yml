@@ -1,4 +1,4 @@
-# Runs the app together with a MongoDB database. Either with the image that CI publishes for every change on main:
+# Runs the app together with a MongoDB database. Either with the image that CI publishes for every version tag:
 #   docker compose pull && docker compose up -d
 # or built from this checkout:
 #   docker compose up -d --build
