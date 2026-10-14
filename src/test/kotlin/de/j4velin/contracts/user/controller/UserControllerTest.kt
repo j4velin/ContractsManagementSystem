@@ -1,6 +1,6 @@
 package de.j4velin.contracts.user.controller
 
-import de.j4velin.contracts.config.WebSecurityConfig
+import de.j4velin.contracts.testsupport.ContractsWebMvcTest
 import de.j4velin.contracts.user.data.User
 import de.j4velin.contracts.user.data.UsersRepository
 import org.hamcrest.Matchers.containsString
@@ -19,8 +19,6 @@ import org.mockito.Mockito.clearInvocations
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
-import org.springframework.context.annotation.Import
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.mock.web.MockHttpSession
 import org.springframework.security.core.userdetails.UserDetailsService
@@ -31,7 +29,6 @@ import org.springframework.security.test.web.servlet.response.SecurityMockMvcRes
 import org.springframework.security.web.csrf.CsrfToken
 import org.springframework.security.web.csrf.CsrfTokenRepository
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository
-import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
@@ -43,19 +40,18 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirec
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.view
 
-@WebMvcTest(UserController::class)
-// SecurityFilterChain beans aren't picked up by @WebMvcTest automatically
-@Import(WebSecurityConfig::class)
+@ContractsWebMvcTest(controllers = [UserController::class])
 class UserControllerTest {
 
     @Autowired
     private lateinit var mockMvc: MockMvc
 
-    @MockitoBean
+    // the mock from @ContractsWebMvcTest
+    @Autowired
     private lateinit var repository: UsersRepository
 
-    // required by WebSecurityConfig (remember-me)
-    @MockitoBean
+    // the mock from @ContractsWebMvcTest
+    @Autowired
     private lateinit var userDetailsService: UserDetailsService
 
     // the bean from WebSecurityConfig, which is also used for the login
