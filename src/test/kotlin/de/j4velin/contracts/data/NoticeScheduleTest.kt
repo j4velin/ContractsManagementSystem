@@ -56,7 +56,7 @@ class NoticeScheduleTest {
     }
 
     @Test
-    fun `test nextPossibleEnd with notice period and min duration, min duration shorter then notice period`() {
+    fun `test nextPossibleEnd with notice period and min duration, min duration shorter than notice period`() {
         val noticePeriod = Period.ofMonths(2)
         val minDuration = Period.ofMonths(1)
         val schedule = NoticeSchedule(startDate = testStartDate, noticePeriod = noticePeriod, minDuration = minDuration)
