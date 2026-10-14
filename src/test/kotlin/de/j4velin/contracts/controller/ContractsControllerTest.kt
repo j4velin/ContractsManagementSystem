@@ -1,12 +1,11 @@
 package de.j4velin.contracts.controller
 
-import de.j4velin.contracts.config.WebSecurityConfig
 import de.j4velin.contracts.data.Bonus
 import de.j4velin.contracts.data.Cancellation
 import de.j4velin.contracts.data.Contract
 import de.j4velin.contracts.data.ContractsRepository
+import de.j4velin.contracts.testsupport.ContractsWebMvcTest
 import de.j4velin.contracts.user.data.User
-import de.j4velin.contracts.user.data.UsersRepository
 import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.matchesPattern
 import org.hamcrest.Matchers.not
@@ -24,9 +23,6 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
-import org.springframework.context.annotation.Import
-import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user
 import org.springframework.test.context.bean.override.convention.TestBean
@@ -43,9 +39,7 @@ import java.time.Period
 import java.time.ZoneOffset
 import java.util.Optional
 
-@WebMvcTest(ContractsController::class)
-// SecurityFilterChain beans aren't picked up by @WebMvcTest automatically
-@Import(WebSecurityConfig::class)
+@ContractsWebMvcTest(controllers = [ContractsController::class])
 class ContractsControllerTest {
 
     @Autowired
@@ -53,14 +47,6 @@ class ContractsControllerTest {
 
     @MockitoBean
     private lateinit var repository: ContractsRepository
-
-    // required by WebSecurityConfig (remember-me)
-    @MockitoBean
-    private lateinit var userDetailsService: UserDetailsService
-
-    // required by UserLocaleResolver
-    @MockitoBean
-    private lateinit var usersRepository: UsersRepository
 
     // replaces the system clock with the fixed one of the clock() factory method below
     @TestBean
@@ -95,6 +81,21 @@ class ContractsControllerTest {
         mockMvc.perform(post("/contracts/c1/$action").with(user(testUser)))
             .andExpect(status().isForbidden)
         verifyNoInteractions(repository)
+    }
+
+    @Test
+    fun `anonymous users are redirected to the login page`() {
+        mockMvc.perform(get("/contracts"))
+            .andExpect(status().is3xxRedirection)
+            .andExpect(redirectedUrl("/login"))
+    }
+
+    @Test
+    fun `anonymous users can open the public home page`() {
+        // guards the shared test setup: only WebSecurityConfig makes "/" public. Spring Boot's default security
+        // (if the setup didn't import it) would redirect to its login page here, just like for "/contracts"
+        mockMvc.perform(get("/"))
+            .andExpect(status().isOk)
     }
 
     @Test
