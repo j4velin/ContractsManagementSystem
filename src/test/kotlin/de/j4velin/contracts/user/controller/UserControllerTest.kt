@@ -7,12 +7,15 @@ import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.not
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
+import org.mockito.ArgumentMatchers.isNull
 import org.mockito.BDDMockito.given
+import org.mockito.Mockito.clearInvocations
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.springframework.beans.factory.annotation.Autowired
@@ -25,8 +28,11 @@ import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user
 import org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated
+import org.springframework.security.web.csrf.CsrfToken
+import org.springframework.security.web.csrf.CsrfTokenRepository
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository
 import org.springframework.test.context.bean.override.mockito.MockitoBean
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -56,11 +62,35 @@ class UserControllerTest {
     @Autowired
     private lateinit var passwordEncoder: PasswordEncoder
 
+    // the real bean from WebSecurityConfig, spied on to see which repository the controller replaces the token in
+    @MockitoSpyBean
+    private lateinit var csrfTokenRepository: CsrfTokenRepository
+
     private fun registerRequest(username: String = "alice", mail: String = "alice@example.com", password: String = "s3cret") =
         post("/register").with(csrf())
             .param("username", username)
             .param("mail", mail)
             .param("password", password)
+
+    /**
+     * A registration within the given session, with a real CSRF token instead of the one [csrf] provides, which
+     * bypasses the CSRF token repository
+     */
+    private fun registerRequest(session: MockHttpSession, csrfToken: String) =
+        post("/register").session(session)
+            .param("_csrf", csrfToken)
+            .param("username", "alice")
+            .param("mail", "alice@example.com")
+            .param("password", "s3cret")
+
+    /**
+     * Loads the registration form like a browser and returns the CSRF token it contains
+     */
+    private fun fetchCsrfToken(session: MockHttpSession): String {
+        val result = mockMvc.perform(get("/register").session(session)).andReturn()
+        val token = result.request.getAttribute(CsrfToken::class.java.name) as CsrfToken
+        return token.token
+    }
 
     private fun register(username: String = "alice", mail: String = "alice@example.com", password: String = "s3cret") =
         mockMvc.perform(registerRequest(username, mail, password))
@@ -98,12 +128,39 @@ class UserControllerTest {
         saveUsers()
         val session = MockHttpSession()
         val sessionIdBefore = session.id
-        mockMvc.perform(registerRequest().session(session))
+        // a real token stored in the session: the one from csrf() never gets there
+        val token = fetchCsrfToken(session)
+        assertNotNull(session.getAttribute(CSRF_TOKEN_ATTRIBUTE))
+        mockMvc.perform(registerRequest(session, token))
             .andExpect(redirectedUrl("/"))
             .andExpect(authenticated().withUsername("alice"))
         assertNotEquals(sessionIdBefore, session.id)
         // the CSRF token used for the registration is removed, the next form gets a new one
         assertNull(session.getAttribute(CSRF_TOKEN_ATTRIBUTE))
+    }
+
+    @Test
+    fun `registration replaces the CSRF token in the configured repository`() {
+        saveUsers()
+        val session = MockHttpSession()
+        val token = fetchCsrfToken(session)
+        clearInvocations(csrfTokenRepository)
+        mockMvc.perform(registerRequest(session, token)).andExpect(redirectedUrl("/"))
+        // saving null removes the token; only the session authentication strategy of the controller does this here
+        verify(csrfTokenRepository).saveToken(isNull(), any(), any())
+    }
+
+    @Test
+    fun `CSRF token from before the registration is rejected afterwards, a new one works`() {
+        saveUsers()
+        val session = MockHttpSession()
+        val oldToken = fetchCsrfToken(session)
+        mockMvc.perform(registerRequest(session, oldToken)).andExpect(redirectedUrl("/"))
+
+        mockMvc.perform(registerRequest(session, oldToken)).andExpect(status().isForbidden)
+        // logged in now, so another registration passes the CSRF check, but is redirected
+        mockMvc.perform(registerRequest(session, fetchCsrfToken(session))).andExpect(redirectedUrl("/contracts"))
+        verify(repository).save(any())
     }
 
     @Test

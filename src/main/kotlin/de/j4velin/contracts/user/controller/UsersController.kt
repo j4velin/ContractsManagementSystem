@@ -13,14 +13,18 @@ import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy
 import org.springframework.security.web.authentication.session.CompositeSessionAuthenticationStrategy
 import org.springframework.security.web.csrf.CsrfAuthenticationStrategy
-import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository
+import org.springframework.security.web.csrf.CsrfTokenRepository
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 
 @Controller
-class UserController(private val repository: UsersRepository, private val passwordEncoder: PasswordEncoder) {
+class UserController(
+    private val repository: UsersRepository,
+    private val passwordEncoder: PasswordEncoder,
+    csrfTokenRepository: CsrfTokenRepository
+) {
 
     private val logger = LoggerFactory.getLogger(UserController::class.java)
 
@@ -29,11 +33,11 @@ class UserController(private val repository: UsersRepository, private val passwo
     /**
      * Applied after logging in a newly registered user. [HttpServletRequest.login] only authenticates, so this does
      * what the form login does by default: it changes the session id (protection against session fixation) and
-     * replaces the CSRF token stored in the session. [HttpSessionCsrfTokenRepository] is the CSRF token repository
-     * which WebSecurityConfig uses (the default one).
+     * replaces the CSRF token. The token is replaced in the [CsrfTokenRepository] bean, which the security filter chain
+     * of WebSecurityConfig uses as well.
      */
     private val sessionAuthenticationStrategy = CompositeSessionAuthenticationStrategy(
-        listOf(ChangeSessionIdAuthenticationStrategy(), CsrfAuthenticationStrategy(HttpSessionCsrfTokenRepository()))
+        listOf(ChangeSessionIdAuthenticationStrategy(), CsrfAuthenticationStrategy(csrfTokenRepository))
     )
 
     @PostMapping("/register")

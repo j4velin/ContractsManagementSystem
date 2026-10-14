@@ -13,6 +13,8 @@ import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.csrf.CsrfTokenRepository
+import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository
 import java.util.*
 
 @Configuration
@@ -47,7 +49,7 @@ class WebSecurityConfig(
 
     @Bean
     @Order(2)
-    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+    fun securityFilterChain(http: HttpSecurity, csrfTokenRepository: CsrfTokenRepository): SecurityFilterChain {
         http.authorizeHttpRequests {
             // forwards and error dispatches render the response of a request that was already authorized (or the
             // error page for one that wasn't)
@@ -58,8 +60,16 @@ class WebSecurityConfig(
             .formLogin { it.loginPage("/login").permitAll() }
             .rememberMe { it.key(rememberMeKey()).userDetailsService(userDetailsService) }
             .logout { it.deleteCookies("JSESSIONID").permitAll() }
+            .csrf { it.csrfTokenRepository(csrfTokenRepository) }
         return http.build()
     }
+
+    /**
+     * Where the CSRF tokens of the main filter chain are stored. A bean, because UserController also needs it: it
+     * replaces the token after logging in a newly registered user, which has to happen in this repository
+     */
+    @Bean
+    fun csrfTokenRepository(): CsrfTokenRepository = HttpSessionCsrfTokenRepository()
 
     @Bean
     fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
