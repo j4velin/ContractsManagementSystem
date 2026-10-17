@@ -47,3 +47,18 @@ Requires Java 21. Copy `src/main/resources/application.properties.sample` to `ap
 ```bash
 ./gradlew bootRun
 ```
+
+## Run in an LXC container (without Docker)
+
+`scripts/setup-lxc.sh` installs the app natively in a Debian 12 container (e.g. a Proxmox LXC): Java 21, MongoDB 8.0
+(only reachable from inside the container) and a systemd service `contracts`. Run it as root from a clone of this
+repository inside the container:
+
+```bash
+APP_PORT=8080 TIMEZONE=Europe/Berlin scripts/setup-lxc.sh
+```
+
+The settings end up in `/etc/contracts/contracts.env`, together with a generated remember-me key. The memory limits
+`APP_MAX_HEAP` and `MONGO_CACHE_GB` work as in `.env` and default to the same values, which suit a container with 2 GB
+of RAM. To update the app, run `git pull && scripts/setup-lxc.sh` again; the settings are kept. MongoDB needs a CPU
+with AVX.
