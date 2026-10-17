@@ -58,5 +58,7 @@ repository inside the container:
 APP_PORT=8080 TIMEZONE=Europe/Berlin scripts/setup-lxc.sh
 ```
 
-The settings end up in `/etc/contracts/contracts.env`, together with a generated remember-me key. To update the app,
-run `git pull && scripts/setup-lxc.sh` again; the settings are kept. MongoDB needs a CPU with AVX.
+The settings end up in `/etc/contracts/contracts.env`, together with a generated remember-me key. The memory limits
+`APP_MAX_HEAP` and `MONGO_CACHE_GB` work as in `.env` and default to the same values, which suit a container with 2 GB
+of RAM. To update the app, run `git pull && scripts/setup-lxc.sh` again; the settings are kept. MongoDB needs a CPU
+with AVX.

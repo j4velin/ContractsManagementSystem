@@ -11,9 +11,11 @@
 #   scripts/setup-lxc.sh app.jar     uses an already built jar instead (built without a local application.properties)
 #
 # Settings for the first run (same names as in .env.example), e.g. APP_PORT=80 scripts/setup-lxc.sh:
-#   APP_PORT (8080), TIMEZONE (Europe/Berlin), FORWARD_HEADERS_STRATEGY (native)
-# They are written to /etc/contracts/contracts.env, together with a generated remember-me key. Later runs keep
-# that file, so to update the app: git pull && scripts/setup-lxc.sh
+#   APP_PORT (8080), TIMEZONE (Europe/Berlin), FORWARD_HEADERS_STRATEGY (native),
+#   APP_MAX_HEAP (256m), MONGO_CACHE_GB (0.25); the memory defaults suit a container with 2 GB of RAM
+# They are written to /etc/contracts/contracts.env (together with a generated remember-me key) and, for MongoDB's
+# cache, to /etc/systemd/system/mongod.service.d/cache.conf. Later runs keep both files, so to update the app:
+# git pull && scripts/setup-lxc.sh
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,6 +38,8 @@ step() {
 [ "$(id -u)" -eq 0 ] || fail "run as root"
 [ -z "$JAR" ] || [ -f "$JAR" ] || fail "jar not found: $JAR"
 [ -z "$JAR" ] || JAR="$(realpath "$JAR")"
+[[ "${APP_MAX_HEAP:-256m}" =~ ^[0-9]+[kKmMgG]$ ]] || fail "APP_MAX_HEAP must be a Java memory size like 256m"
+[[ "${MONGO_CACHE_GB:-0.25}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || fail "MONGO_CACHE_GB must be a number like 0.25"
 
 # shellcheck source=/dev/null
 . /etc/os-release
@@ -71,7 +75,23 @@ JAVA="$(ls -d /usr/lib/jvm/temurin-21-*/bin/java | head -n 1)"
 
 step "Starting MongoDB"
 # the default /etc/mongod.conf binds to 127.0.0.1, so only the app can reach the database
-systemctl enable --now mongod
+MONGO_DROP_IN=/etc/systemd/system/mongod.service.d/cache.conf
+if [ -f "$MONGO_DROP_IN" ]; then
+    echo "keeping the existing cache size in $MONGO_DROP_IN"
+    systemctl enable --now mongod
+else
+    # MongoDB reserves about half of the RAM for its cache by default, far more than this app needs.
+    # Command line options override /etc/mongod.conf, which stays as the package installed it.
+    install -d -m 755 "$(dirname "$MONGO_DROP_IN")"
+    cat > "$MONGO_DROP_IN" <<EOF
+[Service]
+ExecStart=
+ExecStart=/usr/bin/mongod --config /etc/mongod.conf --wiredTigerCacheSizeGB ${MONGO_CACHE_GB:-0.25}
+EOF
+    systemctl daemon-reload
+    systemctl enable mongod
+    systemctl restart mongod
+fi
 
 if [ -z "$JAR" ]; then
     step "Building the app"
@@ -107,6 +127,8 @@ CONTRACTS_REMEMBERME_KEY=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
 SERVER_FORWARD_HEADERS_STRATEGY=${FORWARD_HEADERS_STRATEGY:-native}
 # time zone of the app: decides which contracts are active today and the cancel-by dates
 TZ=${TIMEZONE:-Europe/Berlin}
+# maximum Java heap: plenty for a few users, and small enough for a container with 2 GB of RAM
+JAVA_TOOL_OPTIONS=-Xmx${APP_MAX_HEAP:-256m}
 EOF
     )
     chgrp "$SERVICE_USER" "$ENV_FILE"
